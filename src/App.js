@@ -22,7 +22,7 @@ varying vec2 v_uv;
 
 void main() {
   vec4 tex = texture2D(v_texture, v_uv);
-  gl_FragColor = vec4(tex.xyz, 0.5);
+  gl_FragColor = vec4(tex.xyz, 1);
 }
 `
 
@@ -43,9 +43,9 @@ const b = Math.floor(color.b * 255)
 
 for(let i = 0; i < size; i++){
   const stride = i * 4;
-  data[stride] = r * Math.random()
-  data[stride + 1] = g * Math.random()
-  data[stride + 2] = b * Math.random()
+  data[stride] = 255//r * Math.random()
+  data[stride + 1] = 255//g * Math.random()
+  data[stride + 2] = 255//b * Math.random()
   data[stride + 3] = 255
 }
 
@@ -57,12 +57,8 @@ texture.needsUpdate = true
 //texture.repeat.set(1, 2)
 
 //set up info array
-const blockArray = new Array(Math.floor(ArrayWidth))
+const blockArray = new Array(size)
 blockArray.fill(0)
-for(let i = 0; i < blockArray.length; i++){
-  blockArray[i] = new Array(Math.floor(ArrayHeight))
-  blockArray[i].fill(0)
-}
 
 console.log("width = " + Math.floor(width / 4))
 console.log("height = " + Math.floor(height / 4))
@@ -94,17 +90,16 @@ const paintMap = new THREE.Mesh(
 
 scene.add(paintMap)
 
+//clock stuff
+let clock = new THREE.Clock()
+let delta = 0
+let interval = 1/30
+
+
+
 init()
 
 const App = () => {
-  //scene.add(plane)
-
-  const geometry = new THREE.PlaneGeometry(1, 1)
-  const material = new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.FrontSide })
-  const middle = new THREE.Mesh(geometry, material)
-
-  scene.add(middle)
-
   animate()
 }
 
@@ -119,60 +114,64 @@ function init () {
   camera.position.z = 1
 }
 
-function animate() {
-  // ------------- pointer logic -------------
-  raycaster.setFromCamera(pointer, camera)
+function logic(){
+// ------------- pointer logic -------------
+raycaster.setFromCamera(pointer, camera)
 
-  let pointerToX = Math.floor(pointer.x + (width / 8))
-  let pointerToY = Math.floor(pointer.y + (height / 8))
+let pointerToX = Math.floor(pointer.x + (width / 8))
+let pointerToY = Math.floor(pointer.y + (height / 8))
 
-  if(press){
-    blockArray[pointerToX][pointerToY] = 1
-  }
+if(press){
+  blockArray[pointerToX + pointerToY * ArrayWidth] = 1
 
-  // ------------- update functions -------------
-  for(let x = blockArray.length - 1; x > 0; x--){
-    //console.log("i = " + i)
-    for(let y = 0; y < blockArray[x].length; y++){
-      //console.log("k = " + k)
-      if(blockArray[x][y] !== 0)
-      {
-        let selected = blockArray[x][y]
-        updateSand(selected, x, y)
-      }
-    }
-  }
-  //console.log(blockArray)
-  //console.log(fragBlockArray)
-  requestAnimationFrame(animate)
-  renderer.render(scene, camera)
+  data[(pointerToX + pointerToY * ArrayWidth) * 4] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 1] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 2] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 3] = 0
 }
 
-function updateSand(selected, x, y){
-  if(y >= 2)
+// ------------- update functions -------------
+for(let x = size - 1; x > 0; x--){
+  if(blockArray[x] !== 0)
   {
-    if(blockArray[x][y - 1] === 0)
-    {
-      blockArray[x][y] = 0
-      blockArray[x][y - 1] = selected
+    let selected = blockArray[pointerToX + pointerToY * ArrayWidth]
+    if(selected === 1 && x > ArrayWidth){
+      updateSand(selected, x)
     }
-    else if(blockArray[x - 1][y - 1] === 0)
-    {
-      blockArray[x][y] = 0
-      blockArray[x - 1][y - 1] = selected
-    }
-    else if(blockArray[x + 1][y - 1] === 0)
-    {
-      blockArray[x][y] = 0
-      blockArray[x + 1][y - 1] = selected
-    }
-  }  
+  }
+}
+console.log(blockArray)
+texture.needsUpdate = true
 }
 
-function swapTo(toSwapX, toSwapY, toSwaptoX, toSwaptoY){
-  let temp = brickArray[toSwaptoX][toSwaptoY]
-  brickArray[toSwaptoX][toSwaptoY] = brickArray[toSwapX][toSwapY]
-  brickArray[toSwapX][toSwapY] = temp
+function animate() {
+  requestAnimationFrame(animate)
+  delta += clock.getDelta()
+  if(delta > interval) {
+    logic()
+    renderer.render(scene, camera)
+    delta = delta % interval
+  }
+}
+
+
+function updateSand(selected, x){
+  if(blockArray[x - ArrayWidth] === 0) {
+    blockArray[x - ArrayWidth] = 1
+    blockArray[x] = 0
+
+    data[(x) * 4] = 255
+    data[(x) * 4 + 1] = 255
+    data[(x) * 4 + 2] = 255
+    data[(x) * 4 + 3] = 255
+
+    data[(x  - ArrayWidth) * 4] = 0
+    data[(x  - ArrayWidth) * 4 + 1] = 0
+    data[(x  - ArrayWidth) * 4 + 2] = 0
+    data[(x - ArrayWidth) * 4 + 3] = 0
+
+    console.log("pushed!")
+  } 
 }
 
 function onPointerDown(event) {
