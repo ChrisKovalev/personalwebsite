@@ -51,7 +51,7 @@ for(let i = 0; i < size; i++){
 
 const texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
 
-console.log(texture)
+//console.log(texture)
 texture.needsUpdate = true
 
 //texture.repeat.set(1, 2)
@@ -73,22 +73,6 @@ const scene = new THREE.Scene()
 
 const camera = new THREE.OrthographicCamera(width / - 8, width / 8, height / 8, height / -8, 0, 10)
 const renderer = new THREE.WebGLRenderer()
-
-//shader materials
-
-
-const paintMap = new THREE.Mesh(
-  new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
-  new THREE.ShaderMaterial({
-    uniforms:{
-      v_texture: {value: texture}
-    },
-    vertexShader: _VS,
-    fragmentShader: _FS,
-  })
-);
-
-scene.add(paintMap)
 
 //clock stuff
 let clock = new THREE.Clock()
@@ -112,6 +96,20 @@ function init () {
   document.body.appendChild(renderer.domElement)
 
   camera.position.z = 1
+
+  //shader materials
+  const paintMap = new THREE.Mesh(
+  new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
+  new THREE.ShaderMaterial({
+    uniforms:{
+      v_texture: {value: texture}
+    },
+    vertexShader: _VS,
+    fragmentShader: _FS,
+  })
+);
+scene.add(paintMap)
+
 }
 
 function logic(){
@@ -122,36 +120,48 @@ let pointerToX = Math.floor(pointer.x + (width / 8))
 let pointerToY = Math.floor(pointer.y + (height / 8))
 
 if(press){
+  /*
   blockArray[pointerToX + pointerToY * ArrayWidth] = 1
 
   data[(pointerToX + pointerToY * ArrayWidth) * 4] = 0
   data[(pointerToX + pointerToY * ArrayWidth) * 4 + 1] = 0
   data[(pointerToX + pointerToY * ArrayWidth) * 4 + 2] = 0
   data[(pointerToX + pointerToY * ArrayWidth) * 4 + 3] = 0
+  */
+  blockArray[pointerToX + pointerToY * ArrayWidth] = 1
+
+  data[(pointerToX + pointerToY * ArrayWidth) * 4] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 1] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 2] = 0
+  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 3] = 255
 }
 
 // ------------- update functions -------------
-for(let x = size - 1; x > 0; x--){
+for(let x = 0; x < size; x++){
   if(blockArray[x] !== 0)
   {
     let selected = blockArray[pointerToX + pointerToY * ArrayWidth]
     if(selected === 1 && x > ArrayWidth){
       updateSand(selected, x)
+      //console.log("updated")
     }
   }
 }
-console.log(blockArray)
+//console.log(blockArray)
+//texture.dispose()
+//texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
+
 texture.needsUpdate = true
 }
 
 function animate() {
-  requestAnimationFrame(animate)
   delta += clock.getDelta()
   if(delta > interval) {
     logic()
     renderer.render(scene, camera)
     delta = delta % interval
   }
+  renderer.setAnimationLoop(animate)
 }
 
 
@@ -168,9 +178,8 @@ function updateSand(selected, x){
     data[(x  - ArrayWidth) * 4] = 0
     data[(x  - ArrayWidth) * 4 + 1] = 0
     data[(x  - ArrayWidth) * 4 + 2] = 0
-    data[(x - ArrayWidth) * 4 + 3] = 0
-
-    console.log("pushed!")
+    data[(x - ArrayWidth) * 4 + 3] = 255
+    
   } 
 }
 
