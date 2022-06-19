@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { WebGLRenderer } from "three";
 
 const _VS = `
 
@@ -77,7 +78,7 @@ const renderer = new THREE.WebGLRenderer()
 //clock stuff
 let clock = new THREE.Clock()
 let delta = 0
-let interval = 1/30
+let interval = 1/60
 
 
 
@@ -99,17 +100,26 @@ function init () {
 
   //shader materials
   const paintMap = new THREE.Mesh(
-  new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
-  new THREE.ShaderMaterial({
-    uniforms:{
-      v_texture: {value: texture}
-    },
-    vertexShader: _VS,
-    fragmentShader: _FS,
-  })
+    new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
+    new THREE.ShaderMaterial({
+      uniforms:{
+        v_texture: {value: texture}
+      },
+      vertexShader: _VS,
+      fragmentShader: _FS,
+    })
 );
 scene.add(paintMap)
 
+//test material
+/*
+const plane = new THREE.Mesh(
+  new THREE.PlaneBufferGeometry(ArrayWidth, ArrayHeight),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture})
+);
+
+scene.add(plane)
+*/
 }
 
 function logic(){
@@ -140,28 +150,30 @@ if(press){
 for(let x = 0; x < size; x++){
   if(blockArray[x] !== 0)
   {
-    let selected = blockArray[pointerToX + pointerToY * ArrayWidth]
+    let selected = blockArray[x]
     if(selected === 1 && x > ArrayWidth){
       updateSand(selected, x)
-      //console.log("updated")
     }
   }
 }
+
+texture.needsUpdate = true
 //console.log(blockArray)
 //texture.dispose()
 //texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
-
-texture.needsUpdate = true
 }
 
 function animate() {
+  //renderer.setAnimationLoop(animate)
+  requestAnimationFrame( animate );
   delta += clock.getDelta()
   if(delta > interval) {
     logic()
+    renderer.compile(scene, camera)
     renderer.render(scene, camera)
     delta = delta % interval
+    console.log(texture.version)
   }
-  renderer.setAnimationLoop(animate)
 }
 
 
