@@ -1,5 +1,4 @@
 import * as THREE from "three"
-import { WebGLRenderer } from "three";
 
 const _VS = `
 
@@ -57,21 +56,22 @@ texture.needsUpdate = true
 
 //texture.repeat.set(1, 2)
 
-//set up info array
-const blockArray = new Array(size)
-blockArray.fill(0)
-
-console.log("width = " + Math.floor(width / 4))
-console.log("height = " + Math.floor(height / 4))
-
 //for mk1 press
 let press = false
 
-//for 
+
+//colours
+const sandColour = new THREE.Vector3(194, 178, 128)
+const waterColour = new THREE.Vector3(35, 35, 255)
+
+//for mouse
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
 const scene = new THREE.Scene()
 
+//for keyboard
+
+//for threejs 
 const camera = new THREE.OrthographicCamera(width / - 8, width / 8, height / 8, height / -8, 0, 10)
 const renderer = new THREE.WebGLRenderer()
 
@@ -80,12 +80,45 @@ let clock = new THREE.Clock()
 let delta = 0
 let interval = 1/60
 
+//extra stuff
 
+const waterBlock = {
+  type: 2,
+  hasUpdated: 0,
+  spreadFactor: 5
+}
+
+const sandBlock = {
+  type: 1,
+  hasUpdated: 0,
+  spreadFactor: 0
+}
+
+const emptyBlock = {
+  type: 0,
+  hasUpdated: 0,
+  spreadFactor: 0
+}
+
+let selectedBlock = emptyBlock
+
+//set up info array
+const blockArray = new Array(size)
+for(let i = 0; i < size; i++){
+  blockArray[i] = JSON.parse(JSON.stringify(selectedBlock))
+}
+
+console.log("width = " + Math.floor(width / 4))
+console.log("height = " + Math.floor(height / 4))
 
 init()
 
 const App = () => {
   animate()
+}
+
+const getRndInteger = (min, max) => {
+  return Math.floor(Math.random() * (max - min) + min)
 }
 
 function init () {
@@ -130,69 +163,214 @@ let pointerToX = Math.floor(pointer.x + (width / 8))
 let pointerToY = Math.floor(pointer.y + (height / 8))
 
 if(press){
+  
   /*
-  blockArray[pointerToX + pointerToY * ArrayWidth] = 1
-
-  data[(pointerToX + pointerToY * ArrayWidth) * 4] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 1] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 2] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 3] = 0
+  //scale 1
+  blockArray[pointerToX + pointerToY * ArrayWidth].type = 1
   */
-  blockArray[pointerToX + pointerToY * ArrayWidth] = 1
 
-  data[(pointerToX + pointerToY * ArrayWidth) * 4] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 1] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 2] = 0
-  data[(pointerToX + pointerToY * ArrayWidth) * 4 + 3] = 255
+  //scale 2
+  blockArray[pointerToX + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX + 2) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX - 2) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[pointerToX + (pointerToY + 2) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[pointerToX + (pointerToY - 2) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  
+  
+
+  /*
+  //scale 3
+  blockArray[pointerToX + pointerToY * ArrayWidth].type = 1
+
+  blockArray[(pointerToX + 1) + pointerToY * ArrayWidth].type = 1
+  blockArray[(pointerToX - 1) + pointerToY * ArrayWidth].type = 1
+  blockArray[pointerToX + (pointerToY + 1) * ArrayWidth].type = 1
+  blockArray[pointerToX + (pointerToY - 1) * ArrayWidth].type = 1
+
+  blockArray[(pointerToX + 1) + (pointerToY + 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX - 1) + (pointerToY + 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX + 1) + (pointerToY - 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX - 1) + (pointerToY - 1) * ArrayWidth].type = 1
+
+  blockArray[(pointerToX + 1) + (pointerToY + 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX - 1) + (pointerToY + 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX + 1) + (pointerToY - 1) * ArrayWidth].type = 1
+  blockArray[(pointerToX - 1) + (pointerToY - 1) * ArrayWidth].type = 1
+
+  blockArray[(pointerToX + 2) + pointerToY * ArrayWidth].type = 1
+  blockArray[(pointerToX - 2) + pointerToY * ArrayWidth].type = 1
+  blockArray[pointerToX + (pointerToY + 2) * ArrayWidth].type = 1
+  blockArray[pointerToX + (pointerToY - 2) * ArrayWidth].type = 1
+  */
 }
 
 // ------------- update functions -------------
 for(let x = 0; x < size; x++){
-  if(blockArray[x] !== 0)
+  if(blockArray[x].type !== 0 && blockArray[x].hasUpdated === 0)
   {
-    let selected = blockArray[x]
-    if(selected === 1 && x > ArrayWidth){
-      updateSand(selected, x)
+    if(blockArray[x].type === 1 && x > ArrayWidth){
+      blockArray[x].hasUpdated = 1
+      updateSand(x)
+    }
+    if(blockArray[x].type === 2 && x > ArrayWidth){
+      blockArray[x].hasUpdated = 1
+      updateWater(x)  
     }
   }
 }
 
+
+//reset has Updated
+for(let x = 0; x < size; x++){
+  blockArray[x].hasUpdated = 0
+}
 texture.needsUpdate = true
-//console.log(blockArray)
-//texture.dispose()
-//texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
 }
 
 function animate() {
-  //renderer.setAnimationLoop(animate)
   requestAnimationFrame( animate );
   delta += clock.getDelta()
   if(delta > interval) {
     logic()
-    renderer.compile(scene, camera)
     renderer.render(scene, camera)
     delta = delta % interval
-    console.log(texture.version)
   }
 }
 
-
-function updateSand(selected, x){
-  if(blockArray[x - ArrayWidth] === 0) {
-    blockArray[x - ArrayWidth] = 1
-    blockArray[x] = 0
-
-    data[(x) * 4] = 255
-    data[(x) * 4 + 1] = 255
-    data[(x) * 4 + 2] = 255
-    data[(x) * 4 + 3] = 255
-
-    data[(x  - ArrayWidth) * 4] = 0
-    data[(x  - ArrayWidth) * 4 + 1] = 0
-    data[(x  - ArrayWidth) * 4 + 2] = 0
-    data[(x - ArrayWidth) * 4 + 3] = 255
-    
+function updateWater(x) {
+  if(blockArray[x - ArrayWidth].type === 0) {
+    switchBlocks(x, x - ArrayWidth, waterColour) 
+    return
   } 
+  let rand = getRndInteger(0,2)
+  if(rand === 0){
+    if(blockArray[x - ArrayWidth - 1].type === 0) {
+      switchBlocks(x, x - ArrayWidth - 1, waterColour) 
+      return
+    } else if(blockArray[x - ArrayWidth + 1].type === 0){
+      switchBlocks(x, x - ArrayWidth + 1, waterColour) 
+      return
+    } 
+  } else {
+    if(blockArray[x - ArrayWidth + 1].type === 0) {
+      switchBlocks(x, x - ArrayWidth + 1, waterColour) 
+      return
+    } else if(blockArray[x - ArrayWidth - 1].type === 0){
+      switchBlocks(x, x - ArrayWidth - 1, waterColour) 
+      return
+    } 
+  }
+  if(rand === 0) {
+    if(blockArray[x - 1].type === 0){
+      switchBlocks(x, x - 1, waterColour)
+    } else if(blockArray[x + 1].type === 0){
+      switchBlocks(x, x + 1, waterColour)
+    }
+  } else {
+    if(blockArray[x + 1].type === 0){
+      switchBlocks(x, x + 1, waterColour)
+    } else if(blockArray[x - 1].type === 0){
+      switchBlocks(x, x - 1, waterColour)
+    }
+  }
+}
+
+function updateSand(x){
+  
+  /*
+  if(blockArray[x - ArrayWidth].type === 0) {
+    switchBlocks(x, x - ArrayWidth) 
+  } else if(blockArray[x - ArrayWidth - 1] === 0 && blockArray[x - ArrayWidth + 1] === 0) {
+    if(getRndInteger(0, 1) === 0){
+      switchBlocks(x, x - ArrayWidth + 1) 
+    } else {
+      switchBlocks(x, x - ArrayWidth - 1) 
+    }
+  } else if(blockArray[x - ArrayWidth - 1].type === 0){
+    switchBlocks(x, x - ArrayWidth - 1) 
+  } else if(blockArray[x - ArrayWidth + 1].type === 0){
+    switchBlocks(x, x - ArrayWidth + 1) 
+  }
+  */
+
+  if(blockArray[x - ArrayWidth].type === 0) {
+    switchBlocks(x, x - ArrayWidth, sandColour) 
+    return
+  }
+  let rand = getRndInteger(0, 2)
+
+  if(rand === 0){
+    if(blockArray[x - ArrayWidth - 1].type === 0) {
+      switchBlocks(x, x - ArrayWidth - 1, sandColour) 
+    } else if(blockArray[x - ArrayWidth + 1].type === 0){
+      switchBlocks(x, x - ArrayWidth + 1, sandColour) 
+    }
+  } else if (rand === 1) {
+    if(blockArray[x - ArrayWidth + 1].type === 0) {
+      switchBlocks(x, x - ArrayWidth + 1, sandColour) 
+    } else if(blockArray[x - ArrayWidth - 1].type === 0){
+      switchBlocks(x, x - ArrayWidth - 1, sandColour) 
+    }
+  }
+
+}
+
+function switchBlocks(x, futureX, colour) { 
+  let tempBlock = blockArray[x]
+  blockArray[x] = blockArray[futureX]
+  blockArray[futureX] = tempBlock
+
+
+  let tempRGB = new THREE.Vector3(data[futureX * 4], data[futureX * 4 + 1], data[futureX * 4 + 2])
+
+  data[(x) * 4] = tempRGB.x
+  data[(x) * 4 + 1] = tempRGB.y
+  data[(x) * 4 + 2] = tempRGB.z
+  data[(x) * 4 + 3] = 255
+
+  data[(futureX) * 4] = colour.x
+  data[(futureX) * 4 + 1] = colour.y
+  data[(futureX) * 4 + 2] = colour.z
+  data[(futureX) * 4 + 3] = 255
+
+  /*
+  let tempBlock = blockArray[x]
+  switch(direction){
+    case 0: //up
+      blockArray[x] = blockArray[x + ArrayWidth]
+      blockArray[x + ArrayWidth] = tempBlock
+      break;
+    case 1: //upright
+      blockArray[x] = blockArray[x + ArrayWidth + 1]
+      blockArray[x + ArrayWidth + 1] = tempBlock
+      break;
+    case 2: //right
+      blockArray[x] = blockArray[x + 1]
+      blockArray[x + 1] = tempBlock
+      break;
+    case 3: //downright
+      blockArray[x] = blockArray[x - ArrayWidth + 1]
+      blockArray[x - ArrayWidth + 1] = tempBlock
+      break;
+    case 4: //down
+      blockArray[x] = blockArray[x - ArrayWidth]
+      blockArray[x - ArrayWidth] = tempBlock
+      break;
+    case 5: //downleft
+      blockArray[x] = blockArray[x - ArrayWidth - 1]
+      blockArray[x - ArrayWidth - 1] = tempBlock
+      break;
+    case 6: //left
+      blockArray[x] = blockArray[x - 1]
+      blockArray[x - 1] = tempBlock
+      break;
+    case 7: //upleft
+      blockArray[x] = blockArray[x + ArrayWidth - 1]
+      blockArray[x + ArrayWidth - 1] = tempBlock
+      break;
+  }
+  */
+
 }
 
 function onPointerDown(event) {
@@ -219,6 +397,14 @@ function onPointerMove(event) {
 
   pointer.x = Math.floor(pointer.x * width / 8)
   pointer.y = Math.floor(pointer.y * height / 8)
+}
+
+document.onkeydown = function (e) {
+  if(e.key === '1'){
+    selectedBlock = sandBlock
+  } else if (e.key === '2') {
+    selectedBlock = waterBlock
+  } 
 }
 
 const brickArray = () => {
