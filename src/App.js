@@ -29,8 +29,11 @@ void main() {
 const width = window.innerWidth
 const height = window.innerHeight
 
-const ArrayHeight = Math.floor(height / 4)
-const ArrayWidth = Math.floor(width / 4)
+const widthModifier = 0.25
+const heightModifier = 0.25
+
+const ArrayHeight = Math.floor(height * heightModifier)
+const ArrayWidth = Math.floor(width * widthModifier)
 
 //data texture for shader!
 const size = ArrayHeight * ArrayWidth
@@ -72,7 +75,7 @@ const scene = new THREE.Scene()
 //for keyboard
 
 //for threejs 
-const camera = new THREE.OrthographicCamera(width / - 8, width / 8, height / 8, height / -8, 0, 10)
+const camera = new THREE.OrthographicCamera(width / -(2 / widthModifier), width / (2 / widthModifier), height / (2 / heightModifier), height / -(2 / heightModifier), 0, 10)
 const renderer = new THREE.WebGLRenderer()
 
 //clock stuff
@@ -82,22 +85,27 @@ let interval = 1/60
 
 //extra stuff
 
+let evenOdd = 0
+
 const waterBlock = {
   type: 2,
   hasUpdated: 0,
-  spreadFactor: 5
+  velocityX: 1,
+  velocityY: 1,
 }
 
 const sandBlock = {
   type: 1,
   hasUpdated: 0,
-  spreadFactor: 0
+  velocityX: 1,
+  velocityY: 1,
 }
 
 const emptyBlock = {
   type: 0,
   hasUpdated: 0,
-  spreadFactor: 0
+  velocityX: 0,
+  velocityY: 0,
 }
 
 let selectedBlock = emptyBlock
@@ -108,8 +116,8 @@ for(let i = 0; i < size; i++){
   blockArray[i] = JSON.parse(JSON.stringify(selectedBlock))
 }
 
-console.log("width = " + Math.floor(width / 4))
-console.log("height = " + Math.floor(height / 4))
+console.log("width = " + Math.floor(width * widthModifier))
+console.log("height = " + Math.floor(height * heightModifier))
 
 init()
 
@@ -159,8 +167,8 @@ function logic(){
 // ------------- pointer logic -------------
 raycaster.setFromCamera(pointer, camera)
 
-let pointerToX = Math.floor(pointer.x + (width / 8))
-let pointerToY = Math.floor(pointer.y + (height / 8))
+let pointerToX = Math.floor(pointer.x + (width / (2 / widthModifier)))
+let pointerToY = Math.floor(pointer.y + (height / (2 / heightModifier)))
 
 if(press){
   
@@ -171,6 +179,17 @@ if(press){
 
   //scale 2
   blockArray[pointerToX + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+
+  blockArray[(pointerToX + 1) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX - 1) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[pointerToX + (pointerToY + 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[pointerToX + (pointerToY - 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+
+  blockArray[(pointerToX + 1) + (pointerToY + 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX - 1) + (pointerToY - 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX - 1) + (pointerToY + 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+  blockArray[(pointerToX + 1) + (pointerToY - 1) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
+
   blockArray[(pointerToX + 2) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
   blockArray[(pointerToX - 2) + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
   blockArray[pointerToX + (pointerToY + 2) * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
@@ -231,13 +250,36 @@ function animate() {
   requestAnimationFrame( animate );
   delta += clock.getDelta()
   if(delta > interval) {
-    logic()
+    if(evenOdd === 1){
+      logic()
+      evenOdd = 0
+    } else {
+      logic()
+      evenOdd = 1
+    }
     renderer.render(scene, camera)
     delta = delta % interval
   }
 }
 
 function updateWater(x) {
+
+  if(blockArray[x - ArrayWidth].type === 0){
+    switchBlocks(x, checkDown(x, waterBlock.velocityY), waterColour)
+  } 
+  else if(blockArray[x - ArrayWidth - 1].type === 0) {
+    switchBlocks(x, checkDownLeft(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
+  } 
+  else if(blockArray[x - ArrayWidth + 1].type === 0) {
+    switchBlocks(x, checkDownRight(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
+  } 
+  else if(blockArray[x - 1].type === 0){
+    switchBlocks(x, checkLeft(x, waterBlock.velocityX), waterColour)
+  } 
+  else if(blockArray[x + 1].type === 0){
+    switchBlocks(x, checkRight(x, waterBlock.velocityX), waterColour)
+  } 
+  /*
   if(blockArray[x - ArrayWidth].type === 0) {
     switchBlocks(x, x - ArrayWidth, waterColour) 
     return
@@ -274,25 +316,136 @@ function updateWater(x) {
     }
   }
 }
+*/
+
+}
+
+function checkDown(x, yVelocity){
+  let latest = x
+  yVelocity += 1
+  for(let i = 1; i < yVelocity; i++){
+    if(x - (ArrayWidth * i) <= ArrayWidth * 1){
+      return latest
+    }
+    if(blockArray[x - (ArrayWidth * i)].type === 0){
+      latest = x - (ArrayWidth * i)
+    } else {
+      return latest
+    }
+  }
+  return latest
+}
+
+function checkLeft(x, xVelocity){
+  let latest = x
+  xVelocity += 1
+  for(let i = 1; i < xVelocity; i++){
+    if(x - i <= ArrayWidth * 1){
+      return latest
+    }
+    if(blockArray[x - i].type === 0){
+      latest = x - i
+    } else {
+      return latest
+    }
+  }
+  return latest
+}
+
+function checkRight(x, xVelocity){
+  let latest = x
+  xVelocity += 1
+  for(let i = 1; i < xVelocity; i++){
+    if(x + i <= ArrayWidth * 1){
+      return latest
+    }
+    if(blockArray[x + i].type === 0){
+      latest = x + i
+    } else {
+      return latest
+    }
+  }
+  return latest
+}
+
+function checkDownLeft(x, xVelocity, yVelocity){
+  let latest = x
+  xVelocity += 1
+  yVelocity += 1
+
+  let max = Math.max(yVelocity, xVelocity)
+
+  xVelocity = xVelocity / max
+  yVelocity = yVelocity / max
+
+  let xVelocityStep = 0
+  let yVelocityStep = 0
+  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
+
+  for(let i = 1; i < max; i++){
+    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
+    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
+
+    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
+    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
+    if(x - (ArrayWidth * yVelocityStep) - xVelocityStep <= ArrayWidth * 1) {
+      return latest
+    }
+    if(blockArray[x - (ArrayWidth * yVelocityStep) - xVelocityStep].type === 0){
+      latest = x - (ArrayWidth * yVelocityStep) - xVelocityStep
+    } else {
+      return latest
+    }
+  }
+  return latest
+}
+
+function checkDownRight(x, xVelocity, yVelocity){
+  let latest = x
+  xVelocity += 1
+  yVelocity += 1
+
+  let max = Math.max(yVelocity, xVelocity)
+
+  xVelocity = xVelocity / max
+  yVelocity = yVelocity / max
+
+  let xVelocityStep = 0
+  let yVelocityStep = 0
+  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
+
+  for(let i = 1; i < max; i++){
+    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
+    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
+
+    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
+    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
+    if(x - (ArrayWidth * yVelocityStep) + xVelocityStep <= ArrayWidth * 1) {
+      return latest
+    }
+    if(blockArray[x - (ArrayWidth * yVelocityStep) + xVelocityStep].type === 0){
+      latest = x - (ArrayWidth * yVelocityStep) + xVelocityStep
+    } else {
+      return latest
+    }
+  }
+  return latest
+}
 
 function updateSand(x){
-  
-  /*
-  if(blockArray[x - ArrayWidth].type === 0) {
-    switchBlocks(x, x - ArrayWidth) 
-  } else if(blockArray[x - ArrayWidth - 1] === 0 && blockArray[x - ArrayWidth + 1] === 0) {
-    if(getRndInteger(0, 1) === 0){
-      switchBlocks(x, x - ArrayWidth + 1) 
-    } else {
-      switchBlocks(x, x - ArrayWidth - 1) 
-    }
-  } else if(blockArray[x - ArrayWidth - 1].type === 0){
-    switchBlocks(x, x - ArrayWidth - 1) 
-  } else if(blockArray[x - ArrayWidth + 1].type === 0){
-    switchBlocks(x, x - ArrayWidth + 1) 
-  }
-  */
+  //console.log(checkDown(x, sandBlock.velocityY))
+  if(blockArray[x - ArrayWidth].type === 0){
+    switchBlocks(x, checkDown(x, sandBlock.velocityY), sandColour)
+  } 
+  else if(blockArray[x - ArrayWidth - 1].type === 0) {
+    switchBlocks(x, checkDownLeft(x, sandBlock.velocityX, sandBlock.velocityY), sandColour)
+  } 
+  else if(blockArray[x - ArrayWidth + 1].type === 0) {
+    switchBlocks(x, checkDownRight(x, sandBlock.velocityX, sandBlock.velocityY), sandColour)
+  } 
 
+
+  /*
   if(blockArray[x - ArrayWidth].type === 0) {
     switchBlocks(x, x - ArrayWidth, sandColour) 
     return
@@ -314,8 +467,14 @@ function updateSand(x){
   }
 
 }
+*/
+}
 
 function switchBlocks(x, futureX, colour) { 
+  if(x === futureX){ //if theres no reason to switch blocks :///
+    return
+  }
+
   let tempBlock = blockArray[x]
   blockArray[x] = blockArray[futureX]
   blockArray[futureX] = tempBlock
@@ -395,8 +554,8 @@ function onPointerMove(event) {
 	pointer.x = ( event.clientX / width ) * 2 - 1;
 	pointer.y = - ( event.clientY / height ) * 2 + 1;
 
-  pointer.x = Math.floor(pointer.x * width / 8)
-  pointer.y = Math.floor(pointer.y * height / 8)
+  pointer.x = Math.floor(pointer.x * width / (2 / widthModifier))
+  pointer.y = Math.floor(pointer.y * height / (2 / heightModifier))
 }
 
 document.onkeydown = function (e) {
