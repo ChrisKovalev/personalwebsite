@@ -69,6 +69,7 @@ const waterColour = new THREE.Vector3(35, 35, 255)
 const woodColour = new THREE.Vector3(150, 105, 25)
 const gasColour = new THREE.Vector3(55, 55, 55) 
 const emptyColour = new THREE.Vector3(255, 255, 255)
+const flameColour = new THREE.Vector3(255, 0, 0)
 //for mouse
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -107,6 +108,7 @@ const sandBlock = {
   velocityX: 1,
   velocityY: 1,
   density : 6,
+  flammability: 0,
 }
 
 const woodBlock = {
@@ -116,16 +118,29 @@ const woodBlock = {
   velocityX: 0,
   velocityY: 0,
   density: 10,
+  flammability: 0.3,
 }
 
 const gasBlock = {
   type : 4,
   colour : gasColour,
   hasUpdated: 0, 
-  velocityX: 0, 
-  velocityY: 0, 
+  velocityX: 1, 
+  velocityY: 1, 
   density: 2, 
   ttd: 50,
+  flammability: 0,
+}
+
+const flameBlock = {
+  type :5, 
+  colour: flameColour,
+  hasUpdated: 0, 
+  velocityX: 1,
+  velocityY: 1,
+  density: 1,
+  ttd: 10,
+  flammability: 0,
 }
 
 const emptyBlock = {
@@ -134,8 +149,10 @@ const emptyBlock = {
   hasUpdated: 0,
   velocityX: 0,
   velocityY: 0,
-  density: 0
+  density: 0,
+  flammability: 0,
 }
+
 
 let selectedBlock = emptyBlock
 let colourVariance = 25
@@ -160,17 +177,20 @@ const getRndInteger = (min, max) => {
   return Math.floor(Math.random() * (max - min) + min)
 }
 
-const brensehamLine = (x0, y0, x1, y1) => {
+const brensehamLine = (x0, y0, x1, y1, directBlock) => {
   let dx = Math.abs(x1 - x0)
   let dy = Math.abs(y1 - y0)
   let sx = (x0 < x1) ? 1 : -1
   let sy = (y0 < y1) ? 1 : -1
   let err = dx - dy
 
-  let pixel = 0
-  let prevPixel = x0 + y0 * ArrayWidth
+  let pixel = x0 + y0 * ArrayWidth
 
   while(true) {
+    if(directBlock.density < blockArray[pixel].density){
+      return pixel
+    }
+
     pixel = x0 + y0 * ArrayWidth
     if((x0 === x1) && (y0 === y1)){
       return pixel
@@ -184,12 +204,6 @@ const brensehamLine = (x0, y0, x1, y1) => {
       err += dx
       y0 += sy
     }
-
-    if(blockArray[pixel] !== 0){
-      return prevPixel
-    }
-    prevPixel = pixel
-
   }
 }
 
@@ -343,17 +357,21 @@ if(press){
 if(evenOdd === 1){
   for(let x = 0; x < size; x++){
     if(blockArray[x].type !== 0 && blockArray[x].hasUpdated === 0) {
-      if(blockArray[x].type === 1 && x > ArrayWidth){
+      if(blockArray[x].type === 1){
         blockArray[x].hasUpdated = 1
         updateSand(x)
       }
-      if(blockArray[x].type === 2 && x > ArrayWidth){
+      if(blockArray[x].type === 2){
         blockArray[x].hasUpdated = 1
         updateWater(x)  
       }
-      if(blockArray[x].type === 4 && x < ArrayWidth * (ArrayHeight - 1)){
+      if(blockArray[x].type === 4){
         blockArray[x].hasUpdated = 1
         updateGas(x)
+      }
+      if(blockArray[x].type === 5){
+        blockArray[x].hasUpdated = 1
+        updateFire(x)
       }
     }
   }
@@ -365,17 +383,21 @@ else if(evenOdd === 0){
       let point = x + y * ArrayWidth
   
       if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
-        if(blockArray[point].type === 1 && point > ArrayWidth){
+        if(blockArray[point].type === 1){
           blockArray[point].hasUpdated = 1
           updateSand(point)
         }
-        if(blockArray[point].type === 2 && point > ArrayWidth){
+        if(blockArray[point].type === 2){
           blockArray[point].hasUpdated = 1
           updateWater(point)  
         }
-        if(blockArray[point].type === 4 && point < ArrayWidth * (ArrayHeight - 1)){
+        if(blockArray[point].type === 4){
           blockArray[point].hasUpdated = 1
           updateGas(point)
+        }
+        if(blockArray[point].type === 5){
+          blockArray[point].hasUpdated = 1
+          updateFire(point)
         }
       }
     }
@@ -400,7 +422,47 @@ function animate() {
   }
 }
 
+function updateFire(x) {
+  blockArray[x].ttd--
+  addBlock(0, woodBlock)
+  let selectedDensity = blockArray[x].density
+  if(blockArray[x].ttd <= 0){
+    addBlock(x, emptyBlock)
+  }
+  let rand = getRndInteger(0, 101)
+  let directionRand = getRndInteger(0, 3)
+
+
+  if(x > ArrayWidth * (ArrayHeight - 1)){
+    return
+  }
+  addBlock(brensehamLine(0, 0, 100, 150, blockArray[0]), woodBlock)
+
+
+  /*
+  if(blockArray[x + ArrayWidth].density < blockArray[x].density){
+    switchBlocks(x, checkUp(x, flameBlock.velocityY), flameColour)
+  } 
+  else if(blockArray[x + ArrayWidth - 1].density < selectedDensity) {
+    switchBlocks(x, checkUpLeft(x, flameBlock.velocityX, flameBlock.velocityY), flameColour)
+  } 
+  else if(blockArray[x + ArrayWidth + 1].density < selectedDensity) {
+    switchBlocks(x, checkUpRight(x, flameBlock.velocityX, flameBlock.velocityY), flameColour)
+  } 
+  */
+  
+}
+
+function burnBlock(x){
+
+}
+
 function updateWater(x) {
+  if( x < ArrayWidth){
+    return
+  }
+
+
   let selectedDensity = blockArray[x].density
   if(getRndInteger(0, 2) === 1){
     if(blockArray[x - ArrayWidth].density < selectedDensity){
@@ -483,14 +545,20 @@ function updateGas(x) {
   if(blockArray[x].ttd <= 0){
     addBlock(x, emptyBlock )
   }
+
+
+  if(x > ArrayWidth * (ArrayHeight - 1)){
+    return
+  }
+
   if(blockArray[x + ArrayWidth].density < blockArray[x].density){
-    switchBlocks(x, checkUp(x, sandBlock.velocityY), gasColour)
+    switchBlocks(x, checkUp(x, gasBlock.velocityY), gasColour)
   } 
   else if(blockArray[x + ArrayWidth - 1].density < selectedDensity) {
-    switchBlocks(x, checkUpLeft(x, sandBlock.velocityX, sandBlock.velocityY), gasColour)
+    switchBlocks(x, checkUpLeft(x, gasBlock.velocityX, gasBlock.velocityY), gasColour)
   } 
   else if(blockArray[x + ArrayWidth + 1].density < selectedDensity) {
-    switchBlocks(x, checkUpRight(x, sandBlock.velocityX, sandBlock.velocityY), gasColour)
+    switchBlocks(x, checkUpRight(x, gasBlock.velocityX, gasBlock.velocityY), gasColour)
   } 
 }
 
@@ -687,6 +755,10 @@ function checkDownRight(x, xVelocity, yVelocity){
 }
 
 function updateSand(x){
+  if( x < ArrayWidth){
+    return
+  }
+
   let selectedDensity = blockArray[x].density
   
   if(blockArray[x - ArrayWidth].density < blockArray[x].density){
@@ -833,6 +905,8 @@ document.onkeydown = function (e) {
     selectedBlock = emptyBlock
   } else if (e.key === '4') {
     selectedBlock = gasBlock
+  } else if (e.key === '5') {
+    selectedBlock = flameBlock
   }
 }
 
