@@ -95,18 +95,18 @@ const waterBlock = {
   type: 2,
   colour: waterColour,
   hasUpdated: 0,
-  velocityX: 1,
-  velocityY: 1,
+  velocityX: 2,
+  velocityY: 2,
   density: 5,
-  spreadFactor: 2,
+  spreadFactor: 4,
 }
 
 const sandBlock = {
   type: 1,
   colour: sandColour,
   hasUpdated: 0,
-  velocityX: 1,
-  velocityY: 1,
+  velocityX: 2,
+  velocityY: 2,
   density : 6,
   flammability: 0,
 }
@@ -179,30 +179,44 @@ const getRndInteger = (min, max) => {
 
 const brensehamLine = (x0, y0, x1, y1, directBlock) => {
   let dx = Math.abs(x1 - x0)
-  let dy = Math.abs(y1 - y0)
+  let dy = -Math.abs(y1 - y0)
   let sx = (x0 < x1) ? 1 : -1
   let sy = (y0 < y1) ? 1 : -1
-  let err = dx - dy
+  let err = dx + dy
 
   let pixel = x0 + y0 * ArrayWidth
+  let prevPixel = x0 + y0 * ArrayWidth
 
   while(true) {
-    if(directBlock.density < blockArray[pixel].density){
-      return pixel
+    prevPixel = pixel
+    //addBlock(prevPixel, gasBlock)
+    if((x0 === x1) && (y0 === y1)){
+      return prevPixel
+    }
+    let e2 = 2 * err
+    if (e2 >= dy) {
+      if(x0 === x1){
+        return prevPixel
+      }
+      err += dy
+      x0 += sx
+    }
+    if (e2 <= dx) {
+      if(y0 === y1){
+        return prevPixel
+      }
+      err += dx
+      y0 += sy
     }
 
     pixel = x0 + y0 * ArrayWidth
-    if((x0 === x1) && (y0 === y1)){
-      return pixel
+    
+    if(y0 <= 0){
+      return prevPixel
     }
-    let e2 = 2 * err
-    if (e2 > -dy) {
-      err -= dy
-      x0 += sx
-    }
-    if (e2 < dx) {
-      err += dx
-      y0 += sy
+
+    if(directBlock.density <= blockArray[pixel].density){
+      return prevPixel
     }
   }
 }
@@ -243,7 +257,7 @@ scene.add(plane)
 
 function addBlock(position, block){
     //console.log(block)
-    if(blockArray[position].type === 0){
+    if(blockArray[position].density < block.density){
       blockArray[position] = JSON.parse(JSON.stringify(block))
 
       let ranR = getRndInteger(0, colourVariance)
@@ -281,11 +295,12 @@ let pointerToY = Math.floor(pointer.y + (height / (2 / heightModifier)))
 
 if(press){
   
-  /*
+  
   //scale 1
-  blockArray[pointerToX + pointerToY * ArrayWidth].type = 1
+  /*
+  addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock)
   */
-
+  
   //scale 2
   addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock)
 
@@ -303,7 +318,7 @@ if(press){
   addBlock((pointerToX - 2) + pointerToY * ArrayWidth, selectedBlock)
   addBlock(pointerToX + (pointerToY + 2) * ArrayWidth, selectedBlock)
   addBlock(pointerToX + (pointerToY - 2) * ArrayWidth, selectedBlock)
-
+  
   /*
   blockArray[pointerToX + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
 
@@ -355,23 +370,26 @@ if(press){
 //evenOdd = getRndInteger(0,2)
 
 if(evenOdd === 1){
-  for(let x = 0; x < size; x++){
-    if(blockArray[x].type !== 0 && blockArray[x].hasUpdated === 0) {
-      if(blockArray[x].type === 1){
-        blockArray[x].hasUpdated = 1
-        updateSand(x)
-      }
-      if(blockArray[x].type === 2){
-        blockArray[x].hasUpdated = 1
-        updateWater(x)  
-      }
-      if(blockArray[x].type === 4){
-        blockArray[x].hasUpdated = 1
-        updateGas(x)
-      }
-      if(blockArray[x].type === 5){
-        blockArray[x].hasUpdated = 1
-        updateFire(x)
+  for(let y = 0; y < ArrayHeight; y++){
+    for(let x = 0; x < ArrayWidth; x++){
+      let point = x + y * ArrayWidth
+      if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
+        if(blockArray[point].type === 1){
+          blockArray[point].hasUpdated = 1
+          updateSand(x, y)
+        }
+        if(blockArray[point].type === 2){
+          blockArray[point].hasUpdated = 1
+          updateWater(x, y)  
+        }
+        if(blockArray[point].type === 4){
+          blockArray[point].hasUpdated = 1
+          updateGas(x,y)
+        }
+        if(blockArray[point].type === 5){
+          blockArray[point].hasUpdated = 1
+          updateFire(point)
+        }
       }
     }
   }
@@ -385,15 +403,15 @@ else if(evenOdd === 0){
       if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
         if(blockArray[point].type === 1){
           blockArray[point].hasUpdated = 1
-          updateSand(point)
+          updateSand(x, y)
         }
         if(blockArray[point].type === 2){
           blockArray[point].hasUpdated = 1
-          updateWater(point)  
+          updateWater(x , y)  
         }
         if(blockArray[point].type === 4){
           blockArray[point].hasUpdated = 1
-          updateGas(point)
+          updateGas(x,y)
         }
         if(blockArray[point].type === 5){
           blockArray[point].hasUpdated = 1
@@ -424,21 +442,21 @@ function animate() {
 
 function updateFire(x) {
   blockArray[x].ttd--
-  addBlock(0, woodBlock)
-  let selectedDensity = blockArray[x].density
   if(blockArray[x].ttd <= 0){
     addBlock(x, emptyBlock)
   }
-  let rand = getRndInteger(0, 101)
-  let directionRand = getRndInteger(0, 3)
-
 
   if(x > ArrayWidth * (ArrayHeight - 1)){
     return
   }
-  addBlock(brensehamLine(0, 0, 100, 150, blockArray[0]), woodBlock)
 
+  /*
+  addBlock(0, gasBlock)
+  addBlock(1, woodBlock)
 
+  switchBlocks(0,brensehamLine(100, 100, 25, 25 - 2, blockArray[0]), gasBlock.colour)
+  switchBlocks(1,brensehamLine(100, 100, 25, 25 - 2, blockArray[1]), woodBlock.colour)
+  */
   /*
   if(blockArray[x + ArrayWidth].density < blockArray[x].density){
     switchBlocks(x, checkUp(x, flameBlock.velocityY), flameColour)
@@ -457,13 +475,53 @@ function burnBlock(x){
 
 }
 
-function updateWater(x) {
-  if( x < ArrayWidth){
+function checkWaterLike(point, block, x, y){
+  if(getRndInteger(0,2) === 1){
+    if(block.density > blockArray[point - ArrayWidth].density){
+      switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth - 1].density ) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth + 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX - block.spreadFactor, y, block), block.colour )
+    } 
+    else if(block.density > blockArray[point + 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX + block.spreadFactor, y, block), block.colour )
+    } 
+  } else {
+    if(block.density > blockArray[point - ArrayWidth].density){
+      switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth + 1].density ) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth - 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point + 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX + block.spreadFactor, y, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX - block.spreadFactor, y, block), block.colour )
+    } 
+  }
+  
+}
+
+function updateWater(x, y) {
+  let point = x + y * ArrayWidth
+  let block = blockArray[point]
+
+  if( y < 2){
     return
   }
 
-
-  let selectedDensity = blockArray[x].density
+  checkWaterLike(point, block, x, y)
+  /*
   if(getRndInteger(0, 2) === 1){
     if(blockArray[x - ArrayWidth].density < selectedDensity){
       switchBlocks(x, checkDown(x, waterBlock.velocityY), waterColour)
@@ -497,7 +555,7 @@ function updateWater(x) {
       switchBlocks(x, checkLeft(x, waterBlock.velocityX), waterColour)
     } 
   }
-
+  */
   /*
   if(blockArray[x - ArrayWidth].type === 0) {
     switchBlocks(x, x - ArrayWidth, waterColour) 
@@ -539,18 +597,28 @@ function updateWater(x) {
 
 }
 
-function updateGas(x) {
-  let selectedDensity = blockArray[x].density
-  blockArray[x].ttd--
-  if(blockArray[x].ttd <= 0){
-    addBlock(x, emptyBlock )
+function checkGasLike(point, block, x, y){
+
+}
+
+function updateGas(x, y) {
+  let point = x + y * ArrayWidth
+
+  blockArray[point].ttd--
+  if(blockArray[point].ttd <= 0){
+    addBlock(point, emptyBlock )
   }
 
+  let block = blockArray[point]
 
-  if(x > ArrayWidth * (ArrayHeight - 1)){
+
+  if(y > ArrayHeight - 1){
     return
   }
 
+  checkGasLike(point, block, x, y)
+
+  /*
   if(blockArray[x + ArrayWidth].density < blockArray[x].density){
     switchBlocks(x, checkUp(x, gasBlock.velocityY), gasColour)
   } 
@@ -560,6 +628,7 @@ function updateGas(x) {
   else if(blockArray[x + ArrayWidth + 1].density < selectedDensity) {
     switchBlocks(x, checkUpRight(x, gasBlock.velocityX, gasBlock.velocityY), gasColour)
   } 
+  */
 }
 
 function checkDown(x, yVelocity){
@@ -754,7 +823,28 @@ function checkDownRight(x, xVelocity, yVelocity){
   return latest
 }
 
-function updateSand(x){
+function checkSandLike(point, block, x, y){
+  if(block.density > blockArray[point - ArrayWidth].density){
+    switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+  } 
+  else if(block.density > blockArray[point - ArrayWidth - 1].density ) {
+    switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y - block.velocityY, block), block.colour )
+  } 
+  else if(block.density > blockArray[point - ArrayWidth + 1].density) {
+    switchBlocks(point, brensehamLine(x, y, x + block.velocityX , y - block.velocityY, block), block.colour )
+  } 
+  
+}
+function updateSand(x, y){
+  if(y <= 1){
+    return
+  }
+
+  let point = x + y * ArrayWidth
+  let block = blockArray[point]
+
+  checkSandLike(point, block, x, y)
+  /*
   if( x < ArrayWidth){
     return
   }
@@ -771,7 +861,7 @@ function updateSand(x){
     switchBlocks(x, checkDownRight(x, sandBlock.velocityX, sandBlock.velocityY), sandColour)
   } 
 
-
+  */
   /*
   if(blockArray[x - ArrayWidth].type === 0) {
     switchBlocks(x, x - ArrayWidth, sandColour) 
