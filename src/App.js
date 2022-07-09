@@ -1,4 +1,9 @@
 import * as THREE from "three"
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import React, { Component }  from 'react';
+import { getFCP } from "web-vitals";
+import './App.css';
 
 const _VS = `
 
@@ -26,6 +31,36 @@ void main() {
 }
 `
 
+const _BARVS = `
+varying vec2 v_uv;
+
+void main(){
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+  v_uv = uv;
+
+}
+`
+
+const _BARFS = `
+varying vec2 v_uv;
+
+void main() {
+  vec2 adjustedCoords = v_uv;
+  adjustedCoords.y = 2.0 * adjustedCoords.y;
+
+  vec2 pointsOnLineSeg = vec2(clamp(adjustedCoords.x, 0.5, 1.0), clamp(adjustedCoords.y, 0.35, 1.65));
+  float sdf = distance(adjustedCoords, pointsOnLineSeg) * 2.0 - 1.0;
+
+  float borderSDF = sdf + 0.15;
+
+  if(sdf > 0.0) discard;
+  else{
+    gl_FragColor = vec4(0, borderSDF,borderSDF, 0.975);
+  }
+}
+`
+
 const width = window.innerWidth
 const height = window.innerHeight
 
@@ -44,6 +79,9 @@ const r = Math.floor(color.r * 255)
 const g = Math.floor(color.g * 255)
 const b = Math.floor(color.b * 255)
 
+let pointerToX = 0
+let pointerToY = 0
+
 for(let i = 0; i < size; i++){
   const stride = i * 4;
   data[stride] = 255//r * Math.random()
@@ -53,6 +91,8 @@ for(let i = 0; i < size; i++){
 }
 
 const texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
+
+const fontLoader = new FontLoader()
 
 //console.log(texture)
 texture.needsUpdate = true
@@ -67,9 +107,17 @@ let press = false
 const sandColour = new THREE.Vector3(194, 178, 128)
 const waterColour = new THREE.Vector3(35, 35, 255)
 const woodColour = new THREE.Vector3(150, 105, 25)
-const gasColour = new THREE.Vector3(55, 55, 55) 
-const emptyColour = new THREE.Vector3(255, 255, 255)
+const gasColour = new THREE.Vector3(100, 100, 100) 
+const emptyColour = new THREE.Vector3(15, 27, 27)
 const flameColour = new THREE.Vector3(255, 0, 0)
+const gunpowderColour = new THREE.Vector3(55, 55, 55)
+const acidColour = new THREE.Vector3(50, 205, 50)
+const metalColour = new THREE.Vector3(176, 179, 183)
+
+const red = new THREE.Vector3(245, 0, 0)
+const yellow = new THREE.Vector3(245, 245, 0)
+const orange = new THREE.Vector3(245, 165, 0)
+
 //for mouse
 const raycaster = new THREE.Raycaster()
 const pointer = new THREE.Vector2()
@@ -81,6 +129,7 @@ const scene = new THREE.Scene()
 const camera = new THREE.OrthographicCamera(width / -(2 / widthModifier), width / (2 / widthModifier), height / (2 / heightModifier), height / -(2 / heightModifier), 0, 10)
 const renderer = new THREE.WebGLRenderer()
 
+
 //clock stuff
 let clock = new THREE.Clock()
 let delta = 0
@@ -88,8 +137,15 @@ let interval = 1/60
 
 //extra stuff
 let doItOnce = 0
-
+const uiArray = []
 let evenOdd = 0
+
+//ui stuff
+let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder
+let uiX = (ArrayWidth - 50) / 2
+let uiY = 15 + (ArrayHeight - 100) / -2
+
+
 
 const waterBlock = {
   type: 2,
@@ -97,7 +153,7 @@ const waterBlock = {
   hasUpdated: 0,
   velocityX: 2,
   velocityY: 2,
-  density: 5,
+  density: 3,
   spreadFactor: 4,
 }
 
@@ -107,8 +163,8 @@ const sandBlock = {
   hasUpdated: 0,
   velocityX: 2,
   velocityY: 2,
-  density : 6,
-  flammability: 0,
+  density : 5,
+  acidRes: 0.25,
 }
 
 const woodBlock = {
@@ -118,7 +174,8 @@ const woodBlock = {
   velocityX: 0,
   velocityY: 0,
   density: 10,
-  flammability: 0.3,
+  flammability: 0.20,
+  acidRes: 0.02,
 }
 
 const gasBlock = {
@@ -129,7 +186,6 @@ const gasBlock = {
   velocityY: 1, 
   density: 2, 
   ttd: 50,
-  flammability: 0,
 }
 
 const flameBlock = {
@@ -138,9 +194,40 @@ const flameBlock = {
   hasUpdated: 0, 
   velocityX: 1,
   velocityY: 1,
-  density: 1,
-  ttd: 10,
-  flammability: 0,
+  density: 2,
+  ttd: 20,
+}
+
+const gunpowderBlock = {
+  type : 6, 
+  colour: gunpowderColour,
+  hasUpdated: 0,
+  velocityX: 2, 
+  velocityY: 2,
+  density: 5,
+  flammability: 4.0,
+  acidRes: 0.25,
+}
+
+const acidBlock = {
+  type: 7,
+  colour: acidColour,
+  hasUpdated: 0,
+  velocityX: 2,
+  velocityY: 2,
+  density: 4,
+  spreadFactor: 3,
+  flammability: 2.10,
+}
+
+const metalBlock = {
+  type: 8,
+  colour: metalColour,
+  hasUpdated: 0, 
+  velocityX: 0,
+  velocityY: 0,
+  density: 10,
+  acidRes: 0.001
 }
 
 const emptyBlock = {
@@ -150,7 +237,6 @@ const emptyBlock = {
   velocityX: 0,
   velocityY: 0,
   density: 0,
-  flammability: 0,
 }
 
 
@@ -162,6 +248,11 @@ let colourVariance = 25
 const blockArray = new Array(size)
 for(let i = 0; i < size; i++){
   blockArray[i] = JSON.parse(JSON.stringify(selectedBlock))
+
+  data[i * 4] = emptyColour.x
+  data[i * 4 + 1] = emptyColour.y
+  data[i * 4 + 2] = emptyColour.z
+  data[i * 4 + 3] = 255
 }
 
 console.log("width = " + Math.floor(width * widthModifier))
@@ -171,6 +262,11 @@ init()
 
 const App = () => {
   animate()
+  return(
+    <>
+      <div id = "sandInfo">Sand</div>
+    </>
+  );
 }
 
 const getRndInteger = (min, max) => {
@@ -242,17 +338,143 @@ function init () {
       fragmentShader: _FS,
     })
 );
+paintMap.name = "Canvas"
 scene.add(paintMap)
 
-//test material
-/*
-const plane = new THREE.Mesh(
-  new THREE.PlaneBufferGeometry(ArrayWidth, ArrayHeight),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture})
+setupUI()
+
+}
+
+function setupUI() {
+  bar = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(50 , 100),
+    new THREE.ShaderMaterial({
+      uniforms:{
+      },
+      vertexShader: _BARVS,
+      fragmentShader: _BARFS,
+    })
 );
 
-scene.add(plane)
-*/
+  bar.translateX(uiX)
+  bar.translateY(uiY)
+  bar.name = "sideBar"
+  scene.add( bar );
+
+  uiArray.push(bar)
+
+  sand = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0xCCCC99})
+  )
+
+  sand.translateX(uiX - 10)
+  sand.translateY(uiY + 35)
+  sand.name = "Sand"
+  scene.add(sand)
+
+  uiArray.push(sand)
+
+  /*
+  loader.load( 'fonts/helvetiker_regular.typeface.json', function ( font ) {
+
+    const sandText = new TextGeometry( 'Hello three.js!', {
+      font: font,
+      size: 80,
+      height: 5,
+      curveSegments: 12,
+      bevelEnabled: true,
+      bevelThickness: 10,
+      bevelSize: 8,
+      bevelOffset: 0,
+      bevelSegments: 5
+    } );
+  } );
+  */
+
+  water = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0x2323FF})
+  )
+
+  water.translateX(uiX + 10)
+  water.translateY(uiY + 35)
+  water.name = "Water"
+  scene.add(water)
+
+  uiArray.push(water)
+
+  gas = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0x646464})
+  )
+
+  gas.translateX(uiX - 10)
+  gas.translateY(uiY + 15)
+  gas.name = "Gas"
+  scene.add(gas)
+
+  uiArray.push(gas)
+
+  wood = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0x966919})
+  )
+
+  wood.translateX(uiX + 10)
+  wood.translateY(uiY + 15)
+  wood.name = "Wood"
+  scene.add(wood)
+
+  uiArray.push(wood)
+
+  acid = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0x32CD32})
+  )
+
+  acid.translateX(uiX - 10)
+  acid.translateY(uiY - 5)
+  acid.name = "Acid"
+  scene.add(acid)
+
+  uiArray.push(acid)
+
+  fire = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0xff0000})
+  )
+
+  fire.translateX(uiX + 10)
+  fire.translateY(uiY - 5)
+  fire.name = "Fire"
+  scene.add(fire)
+
+  uiArray.push(fire)
+
+  metal = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0xB0B3B7})
+  )
+
+  metal.translateX(uiX - 10)
+  metal.translateY(uiY - 25)
+  metal.name = "Metal"
+  scene.add(metal)
+
+  uiArray.push(metal)
+
+  gunpowder = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(10, 10), 
+    new THREE.MeshBasicMaterial({color: 0x373737})
+  )
+
+  gunpowder.translateX(uiX + 10)
+  gunpowder.translateY(uiY - 25)
+  gunpowder.name = "Gunpowder"
+  scene.add(gunpowder)
+
+  uiArray.push(gunpowder)
 }
 
 function addBlock(position, block){
@@ -276,12 +498,16 @@ function addBlock(position, block){
       if(block.type === 4){
         block.ttd = getRndInteger(5, 150)
       }
+      if(block.type === 5){
+        block.ttd = getRndInteger(10, 40)
+        block.colour = selectFireColour()
+      }
     } else if (block.type === 0){
       blockArray[position] = JSON.parse(JSON.stringify(block))
 
-      data[position * 4] = 255
-      data[position * 4 + 1] = 255
-      data[position * 4 + 2] = 255
+      data[position * 4] = emptyColour.x
+      data[position * 4 + 1] = emptyColour.y
+      data[position * 4 + 2] = emptyColour.z
       data[position * 4 + 3] = 255
     }
 }
@@ -290,12 +516,18 @@ function logic(){
 // ------------- pointer logic -------------
 raycaster.setFromCamera(pointer, camera)
 
-let pointerToX = Math.floor(pointer.x + (width / (2 / widthModifier)))
-let pointerToY = Math.floor(pointer.y + (height / (2 / heightModifier)))
+const intersects = raycaster.intersectObjects( uiArray );
+if(intersects.length > 0){
+  for(let i = 0; i < intersects.length; i++){
+    if(intersects[i].object.name === "Sand") {
+
+      addBlock(150 + ArrayWidth * 15, gasBlock)
+    }
+  }
+}
 
 if(press){
-  
-  
+  //console.log("X = " + pointer.x + "         Y = " + pointer.y) 
   //scale 1
   /*
   addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock)
@@ -377,18 +609,32 @@ if(evenOdd === 1){
         if(blockArray[point].type === 1){
           blockArray[point].hasUpdated = 1
           updateSand(x, y)
+          continue
         }
         if(blockArray[point].type === 2){
           blockArray[point].hasUpdated = 1
           updateWater(x, y)  
+          continue
         }
         if(blockArray[point].type === 4){
           blockArray[point].hasUpdated = 1
           updateGas(x,y)
+          continue
         }
         if(blockArray[point].type === 5){
           blockArray[point].hasUpdated = 1
-          updateFire(point)
+          updateFire(x, y)
+          continue
+        }
+        if(blockArray[point].type === 6){
+          blockArray[point].hasUpdated = 1
+          updateSand(x, y)
+          continue
+        }
+        if(blockArray[point].type === 7){
+          blockArray[point].hasUpdated = 1
+          updateAcid(x, y)
+          continue
         }
       }
     }
@@ -404,18 +650,32 @@ else if(evenOdd === 0){
         if(blockArray[point].type === 1){
           blockArray[point].hasUpdated = 1
           updateSand(x, y)
+          continue
         }
         if(blockArray[point].type === 2){
           blockArray[point].hasUpdated = 1
           updateWater(x , y)  
+          continue
         }
         if(blockArray[point].type === 4){
           blockArray[point].hasUpdated = 1
           updateGas(x,y)
+          continue
         }
         if(blockArray[point].type === 5){
           blockArray[point].hasUpdated = 1
-          updateFire(point)
+          updateFire(x, y)
+          continue
+        }
+        if(blockArray[point].type === 6){
+          blockArray[point].hasUpdated = 1
+          updateSand(x, y)
+          continue
+        }
+        if(blockArray[point].type === 7){
+          blockArray[point].hasUpdated = 1
+          updateAcid(x, y)
+          continue
         }
       }
     }
@@ -438,41 +698,129 @@ function animate() {
     renderer.render(scene, camera)
     delta = delta % interval
   }
+  //drawUI()
 }
 
-function updateFire(x) {
-  blockArray[x].ttd--
-  if(blockArray[x].ttd <= 0){
-    addBlock(x, emptyBlock)
+function checkFireLike(accessPoint){
+  if(blockArray[accessPoint].flammability !== 0)
+  {
+    if(getRndInteger(0, 1001) <= blockArray[accessPoint].flammability * 100)
+    {
+      burnBlock(accessPoint, flameBlock)
+    }
+  }
+}
+
+function checkAcidLike(accessPoint){
+  if(blockArray[accessPoint].acidRes !== 0)
+  {
+    if(getRndInteger(0, 1001) <= blockArray[accessPoint].acidRes * 100)
+    {
+      addBlock(accessPoint, emptyBlock)
+    }
+  }
+}
+
+function selectFireColour(){
+  let num = getRndInteger(0, 3)
+
+  if(num === 0) {
+    return red
+  } else if (num === 1){
+    return yellow
+  } else if(num === 2){
+    return orange
+  }
+}
+
+function updateFire(x, y) {
+  let point = x + y * ArrayWidth
+
+  blockArray[point].ttd--
+  if(blockArray[point].ttd <= 0){
+    addBlock(point, emptyBlock)
+    addBlock(point, gasBlock)
   }
 
-  if(x > ArrayWidth * (ArrayHeight - 1)){
+  let accessPoint = point - ArrayWidth //below
+  checkFireLike(accessPoint)
+  
+  accessPoint = point - ArrayWidth - 1 //below left
+  checkFireLike(accessPoint)
+
+  accessPoint = point - ArrayWidth + 1 //below right
+  checkFireLike(accessPoint)
+
+  accessPoint = point - 1 //left
+  checkFireLike(accessPoint)
+
+  accessPoint = point + 1 //right
+  checkFireLike(accessPoint)
+
+  accessPoint = point + ArrayWidth + 1 //up right
+  checkFireLike(accessPoint)
+
+  accessPoint = point + ArrayWidth - 1 //up left
+  checkFireLike(accessPoint)
+
+  accessPoint = point + ArrayWidth //up 
+  checkFireLike(accessPoint)
+
+  let temp = getRndInteger(0, 2)
+
+  if(temp === 0)
+  {
+    if(blockArray[point + ArrayWidth].density < blockArray[point].density){
+       switchBlocks(point, point + ArrayWidth,  blockArray[point].colour)
+    }
+  }
+
+}
+
+function burnBlock(point, block){
+    let densityLength = blockArray[point].density * 2.5
+
+    blockArray[point] = JSON.parse(JSON.stringify(block))
+    blockArray[point].colour = selectFireColour()
+
+    let ranR = getRndInteger(0, colourVariance)
+    let ranG = getRndInteger(0, colourVariance)
+    let ranB = getRndInteger(0, colourVariance)
+
+    let randomR = ranR + block.colour.x > 255 ? 255 : ranR + blockArray[point].colour.x
+    let randomG = ranG + block.colour.y > 255 ? 255 : ranG + blockArray[point].colour.y
+    let randomB = ranB + block.colour.z > 255 ? 255 : ranB + blockArray[point].colour.z
+
+    data[point * 4] = randomR
+    data[point * 4 + 1] = randomG
+    data[point * 4 + 2] = randomB
+    data[point * 4 + 3] = 2555
+
+    blockArray[point].ttd = getRndInteger(10, 40)
+    blockArray[point].ttd += densityLength
+}
+
+function updateAcid(x, y){
+  let point = x + y * ArrayWidth
+  let block = blockArray[point]
+
+  let accessPoint = point - ArrayWidth //below
+  checkAcidLike(accessPoint)
+
+  accessPoint = point - 1 //left
+  checkAcidLike(accessPoint)
+
+  accessPoint = point + 1 //right
+  checkAcidLike(accessPoint)
+
+  accessPoint = point + ArrayWidth //up 
+  checkAcidLike(accessPoint)
+
+  if( y < 2){
     return
   }
 
-  /*
-  addBlock(0, gasBlock)
-  addBlock(1, woodBlock)
-
-  switchBlocks(0,brensehamLine(100, 100, 25, 25 - 2, blockArray[0]), gasBlock.colour)
-  switchBlocks(1,brensehamLine(100, 100, 25, 25 - 2, blockArray[1]), woodBlock.colour)
-  */
-  /*
-  if(blockArray[x + ArrayWidth].density < blockArray[x].density){
-    switchBlocks(x, checkUp(x, flameBlock.velocityY), flameColour)
-  } 
-  else if(blockArray[x + ArrayWidth - 1].density < selectedDensity) {
-    switchBlocks(x, checkUpLeft(x, flameBlock.velocityX, flameBlock.velocityY), flameColour)
-  } 
-  else if(blockArray[x + ArrayWidth + 1].density < selectedDensity) {
-    switchBlocks(x, checkUpRight(x, flameBlock.velocityX, flameBlock.velocityY), flameColour)
-  } 
-  */
-  
-}
-
-function burnBlock(x){
-
+  checkWaterLike(point, block, x, y)
 }
 
 function checkWaterLike(point, block, x, y){
@@ -521,84 +869,18 @@ function updateWater(x, y) {
   }
 
   checkWaterLike(point, block, x, y)
-  /*
-  if(getRndInteger(0, 2) === 1){
-    if(blockArray[x - ArrayWidth].density < selectedDensity){
-      switchBlocks(x, checkDown(x, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x - ArrayWidth - 1].density < selectedDensity) {
-      switchBlocks(x, checkDownLeft(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x - ArrayWidth + 1].density < selectedDensity) {
-      switchBlocks(x, checkDownRight(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x - 1].density < selectedDensity){
-      switchBlocks(x, checkLeft(x, waterBlock.velocityX), waterColour)
-    } 
-    else if(blockArray[x + 1].density < selectedDensity){
-      switchBlocks(x, checkRight(x, waterBlock.velocityX), waterColour)
-    } 
-  } else {
-    if(blockArray[x - ArrayWidth].density < selectedDensity){
-      switchBlocks(x, checkDown(x, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x - ArrayWidth + 1].density < selectedDensity) {
-      switchBlocks(x, checkDownRight(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x - ArrayWidth - 1].density < selectedDensity) {
-      switchBlocks(x, checkDownLeft(x, waterBlock.velocityX, waterBlock.velocityY), waterColour)
-    } 
-    else if(blockArray[x + 1].density < selectedDensity){
-      switchBlocks(x, checkRight(x, waterBlock.velocityX), waterColour)
-    } 
-    else if(blockArray[x - 1].density < selectedDensity){
-      switchBlocks(x, checkLeft(x, waterBlock.velocityX), waterColour)
-    } 
-  }
-  */
-  /*
-  if(blockArray[x - ArrayWidth].type === 0) {
-    switchBlocks(x, x - ArrayWidth, waterColour) 
-    return
-  } 
-  let rand = getRndInteger(0,2)
-  if(rand === 0){
-    if(blockArray[x - ArrayWidth - 1].type === 0) {
-      switchBlocks(x, x - ArrayWidth - 1, waterColour) 
-      return
-    } else if(blockArray[x - ArrayWidth + 1].type === 0){
-      switchBlocks(x, x - ArrayWidth + 1, waterColour) 
-      return
-    } 
-  } else {
-    if(blockArray[x - ArrayWidth + 1].type === 0) {
-      switchBlocks(x, x - ArrayWidth + 1, waterColour) 
-      return
-    } else if(blockArray[x - ArrayWidth - 1].type === 0){
-      switchBlocks(x, x - ArrayWidth - 1, waterColour) 
-      return
-    } 
-  }
-  if(rand === 0) {
-    if(blockArray[x - 1].type === 0){
-      switchBlocks(x, x - 1, waterColour)
-    } else if(blockArray[x + 1].type === 0){
-      switchBlocks(x, x + 1, waterColour)
-    }
-  } else {
-    if(blockArray[x + 1].type === 0){
-      switchBlocks(x, x + 1, waterColour)
-    } else if(blockArray[x - 1].type === 0){
-      switchBlocks(x, x - 1, waterColour)
-    }
-  }
-}
-*/
-
 }
 
 function checkGasLike(point, block, x, y){
-
+  if(block.density > blockArray[point + ArrayWidth].density){
+    switchBlocks(point, brensehamLine(x, y, x, y + block.velocityY, block), block.colour )
+  } 
+  else if(block.density > blockArray[point + ArrayWidth - 1].density ) {
+    switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y + block.velocityY, block), block.colour )
+  } 
+  else if(block.density > blockArray[point + ArrayWidth + 1].density) {
+    switchBlocks(point, brensehamLine(x, y, x + block.velocityX , y + block.velocityY, block), block.colour )
+  } 
 }
 
 function updateGas(x, y) {
@@ -612,7 +894,7 @@ function updateGas(x, y) {
   let block = blockArray[point]
 
 
-  if(y > ArrayHeight - 1){
+  if(y >= ArrayHeight - 1){
     return
   }
 
@@ -629,198 +911,6 @@ function updateGas(x, y) {
     switchBlocks(x, checkUpRight(x, gasBlock.velocityX, gasBlock.velocityY), gasColour)
   } 
   */
-}
-
-function checkDown(x, yVelocity){
-  let latest = x
-  yVelocity += 1
-  for(let i = 1; i < yVelocity; i++){
-    if(x - (ArrayWidth * i) <= ArrayWidth * 1){
-      return latest
-    }
-    if(blockArray[x - (ArrayWidth * i)].density < blockArray[x].density){
-      latest = x - (ArrayWidth * i)
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkUp(x, yVelocity) {
-  let latest = x
-  yVelocity += 1
-  for(let i = 1; i < yVelocity; i++){
-    if(x + (ArrayWidth * i) <= ArrayWidth * 1){
-      return latest
-    }
-    if(blockArray[x + (ArrayWidth * i)].density < blockArray[x].density){
-      latest = x + (ArrayWidth * i)
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkLeft(x, xVelocity){
-  let latest = x
-  xVelocity += 1
-  for(let i = 1; i < xVelocity + blockArray[x].spreadFactor; i++){
-    if(x - i <= ArrayWidth * 1){
-      return latest
-    }
-    if(blockArray[x - i].density < blockArray[x].density){
-      latest = x - i
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkRight(x, xVelocity){
-  let latest = x
-  xVelocity += 1
-  for(let i = 1; i < xVelocity + blockArray[x].spreadFactor; i++){
-    if(x + i <= ArrayWidth * 1){
-      return latest
-    }
-    if(blockArray[x + i].density < blockArray[x].density){
-      latest = x + i
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkUpLeft(x, xVelocity, yVelocity) {
-  let latest = x
-  xVelocity += 1
-  yVelocity += 1
-
-  let max = Math.max(yVelocity, xVelocity)
-
-  xVelocity = xVelocity / max
-  yVelocity = yVelocity / max
-
-  let xVelocityStep = 0
-  let yVelocityStep = 0
-  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
-
-  for(let i = 1; i < max; i++){
-    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
-    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
-
-    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
-    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
-    if(x + (ArrayWidth * yVelocityStep) - xVelocityStep <= ArrayWidth * 1) {
-      return latest
-    }
-    if(blockArray[x + (ArrayWidth * yVelocityStep) - xVelocityStep].density < blockArray[x].density){
-      latest = x + (ArrayWidth * yVelocityStep) - xVelocityStep
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkUpRight(x, xVelocity, yVelocity) {
-  let latest = x
-  xVelocity += 1
-  yVelocity += 1
-
-  let max = Math.max(yVelocity, xVelocity)
-
-  xVelocity = xVelocity / max
-  yVelocity = yVelocity / max
-
-  let xVelocityStep = 0
-  let yVelocityStep = 0
-  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
-
-  for(let i = 1; i < max; i++){
-    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
-    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
-
-    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
-    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
-    if(x + (ArrayWidth * yVelocityStep) + xVelocityStep <= ArrayWidth * 1) {
-      return latest
-    }
-    if(blockArray[x + (ArrayWidth * yVelocityStep) + xVelocityStep].density < blockArray[x].density){
-      latest = x + (ArrayWidth * yVelocityStep) + xVelocityStep
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkDownLeft(x, xVelocity, yVelocity){
-  let latest = x
-  xVelocity += 1
-  yVelocity += 1
-
-  let max = Math.max(yVelocity, xVelocity)
-
-  xVelocity = xVelocity / max
-  yVelocity = yVelocity / max
-
-  let xVelocityStep = 0
-  let yVelocityStep = 0
-  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
-
-  for(let i = 1; i < max; i++){
-    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
-    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
-
-    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
-    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
-    if(x - (ArrayWidth * yVelocityStep) - xVelocityStep <= ArrayWidth * 1) {
-      return latest
-    }
-    if(blockArray[x - (ArrayWidth * yVelocityStep) - xVelocityStep].density < blockArray[x].density){
-      latest = x - (ArrayWidth * yVelocityStep) - xVelocityStep
-    } else {
-      return latest
-    }
-  }
-  return latest
-}
-
-function checkDownRight(x, xVelocity, yVelocity){
-  let latest = x
-  xVelocity += 1
-  yVelocity += 1
-
-  let max = Math.max(yVelocity, xVelocity)
-
-  xVelocity = xVelocity / max
-  yVelocity = yVelocity / max
-
-  let xVelocityStep = 0
-  let yVelocityStep = 0
-  //console.log("xVelocity = " + xVelocity  + "     yVelocity  = " + yVelocity)
-
-  for(let i = 1; i < max; i++){
-    xVelocityStep = Math.floor(xVelocity + xVelocityStep)
-    yVelocityStep = Math.floor(yVelocity + yVelocityStep)
-
-    //console.log("xVelocity = " + xVelocityStep  + "     yVelocity  = " + yVelocityStep)
-    //console.log(x - (ArrayWidth * yVelocityStep) - xVelocityStep)
-    if(x - (ArrayWidth * yVelocityStep) + xVelocityStep <= ArrayWidth * 1) {
-      return latest
-    }
-    if(blockArray[x - (ArrayWidth * yVelocityStep) + xVelocityStep].density < blockArray[x].density){
-      latest = x - (ArrayWidth * yVelocityStep) + xVelocityStep
-    } else {
-      return latest
-    }
-  }
-  return latest
 }
 
 function checkSandLike(point, block, x, y){
@@ -844,47 +934,6 @@ function updateSand(x, y){
   let block = blockArray[point]
 
   checkSandLike(point, block, x, y)
-  /*
-  if( x < ArrayWidth){
-    return
-  }
-
-  let selectedDensity = blockArray[x].density
-  
-  if(blockArray[x - ArrayWidth].density < blockArray[x].density){
-    switchBlocks(x, checkDown(x, sandBlock.velocityY), sandColour)
-  } 
-  else if(blockArray[x - ArrayWidth - 1].density < selectedDensity) {
-    switchBlocks(x, checkDownLeft(x, sandBlock.velocityX, sandBlock.velocityY), sandColour)
-  } 
-  else if(blockArray[x - ArrayWidth + 1].density < selectedDensity) {
-    switchBlocks(x, checkDownRight(x, sandBlock.velocityX, sandBlock.velocityY), sandColour)
-  } 
-
-  */
-  /*
-  if(blockArray[x - ArrayWidth].type === 0) {
-    switchBlocks(x, x - ArrayWidth, sandColour) 
-    return
-  }
-  let rand = getRndInteger(0, 2)
-
-  if(rand === 0){
-    if(blockArray[x - ArrayWidth - 1].type === 0) {
-      switchBlocks(x, x - ArrayWidth - 1, sandColour) 
-    } else if(blockArray[x - ArrayWidth + 1].type === 0){
-      switchBlocks(x, x - ArrayWidth + 1, sandColour) 
-    }
-  } else if (rand === 1) {
-    if(blockArray[x - ArrayWidth + 1].type === 0) {
-      switchBlocks(x, x - ArrayWidth + 1, sandColour) 
-    } else if(blockArray[x - ArrayWidth - 1].type === 0){
-      switchBlocks(x, x - ArrayWidth - 1, sandColour) 
-    }
-  }
-
-}
-*/
 }
 
 function switchBlocks(x, futureX, colour) { 
@@ -960,16 +1009,8 @@ function switchBlocks(x, futureX, colour) {
 
 function onPointerDown(event) {
   press = true
-  /*
-  console.log("x = " + Math.floor(pointer.x + (width / 8)) + "y = " + Math.floor(pointer.y + (height / 8)))
-  //blockArray[Math.floor(pointer.x + (width / 8))][Math.floor(pointer.y + (height / 8))] = generateSand(pointer.x, pointer.y)
+  
 
-  blockArray[Math.floor(pointer.x + (width / 8))][Math.floor(pointer.y + (height / 8))] = generateSand(pointer.x, pointer.y)
-  blockArray[Math.floor(pointer.x + (width / 8)) + 1][Math.floor(pointer.y + (height / 8))] = generateSand(pointer.x + 1, pointer.y)
-  blockArray[Math.floor(pointer.x + (width / 8)) - 1][Math.floor(pointer.y + (height / 8))] = generateSand(pointer.x - 1, pointer.y)
-  blockArray[Math.floor(pointer.x + (width / 8))][Math.floor(pointer.y + (height / 8)) + 1] = generateSand(pointer.x, pointer.y + 1)
-  blockArray[Math.floor(pointer.x + (width / 8))][Math.floor(pointer.y + (height / 8)) - 1] = generateSand(pointer.x, pointer.y - 1)
-  */
 }
 
 function onPointerUp(event) {
@@ -982,6 +1023,12 @@ function onPointerMove(event) {
 
   pointer.x = Math.floor(pointer.x * width / (2 / widthModifier))
   pointer.y = Math.floor(pointer.y * height / (2 / heightModifier))
+
+  pointerToX = Math.floor(pointer.x + (width / (2 / widthModifier)))
+  pointerToY = Math.floor(pointer.y + (height / (2 / heightModifier)))
+
+  pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+  pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
 }
 
 document.onkeydown = function (e) {
@@ -997,79 +1044,13 @@ document.onkeydown = function (e) {
     selectedBlock = gasBlock
   } else if (e.key === '5') {
     selectedBlock = flameBlock
+  } else if (e.key === '6') {
+    selectedBlock = gunpowderBlock
+  } else if (e.key === '7') {
+    selectedBlock = acidBlock
+  } else if (e.key === '8') {
+    selectedBlock = metalBlock
   }
-}
-
-const brickArray = () => {
-
-  for(let i = 0; i < width / 4; i++){
-    let linePoints = []
-    linePoints.push(new THREE.Vector3(width / -8 + i, height / 8, 0))
-    linePoints.push(new THREE.Vector3(width / -8 + i, height / -8, 0))
-    const lgeo = new THREE.BufferGeometry().setFromPoints(linePoints)
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x111111 })
-    const line = new THREE.Line(lgeo, lineMat)
-    scene.add(line)
-
-    let linePointsy = []
-    linePointsy.push(new THREE.Vector3(width / 8 , height / -8 + i, 0))
-    linePointsy.push(new THREE.Vector3(width / -8 , height / -8 + i, 0))
-    const lygeo = new THREE.BufferGeometry().setFromPoints(linePointsy)
-    const liney = new THREE.Line(lygeo, lineMat)
-    scene.add(liney)
-  }
-
-  /*
-  const negativeXpoints = []
-  negativeXpoints.push(new THREE.Vector3(width / -8 + 1, height / 8 - 1, 0))
-  negativeXpoints.push(new THREE.Vector3(width / -8 + 1, height / -8 + 1, 0))
-  negativeXpoints.push(new THREE.Vector3(width / 8 - 1, height / -8 + 1, 0))
-  negativeXpoints.push(new THREE.Vector3(width / 8 - 1, height / 8 - 1, 0))
-  negativeXpoints.push(new THREE.Vector3(width / -8 + 1, height / 8 - 1, 0))
-
-  const nxGeometry = new THREE.BufferGeometry().setFromPoints(negativeXpoints)
-  const nxMaterial = new THREE.LineBasicMaterial({ color: 0xffffff })
-  const nxLine = new THREE.Line(nxGeometry, nxMaterial)
-  scene.add(nxLine)
-  */
-}
-
-const normalDirections = (xPosition, yPosition, zPosition) => {
-  const xPoints = [];
-  xPoints.push(new THREE.Vector3(xPosition, yPosition, zPosition))
-  xPoints.push(new THREE.Vector3(10 + xPosition, yPosition, zPosition))
-  const xGeometry = new THREE.BufferGeometry().setFromPoints(xPoints)
-  const xMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
-  const xLine = new THREE.Line(xGeometry, xMaterial)
-  scene.add(xLine)
-
-  const yPoints = [];
-  yPoints.push(new THREE.Vector3(xPosition, yPosition, zPosition))
-  yPoints.push(new THREE.Vector3(xPosition, 10 + yPosition, zPosition))
-  const yGeometry = new THREE.BufferGeometry().setFromPoints(yPoints)
-  const yMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 })
-  const yLine = new THREE.Line(yGeometry, yMaterial)
-  scene.add(yLine)
-
-  const zPoints = [];
-  zPoints.push(new THREE.Vector3(xPosition, yPosition, zPosition))
-  zPoints.push(new THREE.Vector3(xPosition, yPosition, 10 + zPosition))
-  const zGeometry = new THREE.BufferGeometry().setFromPoints(zPoints)
-  const zMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff })
-  const zLine = new THREE.Line(zGeometry, zMaterial)
-  scene.add(zLine)
-}
-
-const generateSand = (xPos, yPos) => {
-  /*
-  const geometry = new THREE.PlaneGeometry(1, 1)
-  const material = new THREE.MeshBasicMaterial({color: 0xd1c436, side: THREE.FrontSide })
-  const sand = new THREE.Mesh(geometry, material)
-
-  sand.translateX(xPos)
-  sand.translateY(yPos)
-  */
-  return 1
 }
 
 export default App;
