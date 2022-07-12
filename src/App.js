@@ -1,9 +1,11 @@
 import * as THREE from "three"
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
-import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import React, { Component }  from 'react';
-import { getFCP } from "web-vitals";
 import './App.css';
+
+import UITexture from "./textures/UITexture200x400.png"
+import borderOutline from "./textures/borderPick40x40.png"
+import arrowLeftPic from "./textures/ArrowLeft60x40.png"
+import arrowRightPic from "./textures/ArrowRight60x40.png"
 
 const _VS = `
 
@@ -61,11 +63,12 @@ void main() {
 }
 `
 
+
 const width = window.innerWidth
 const height = window.innerHeight
 
-const widthModifier = 0.25
-const heightModifier = 0.25
+const widthModifier = 0.5
+const heightModifier = 0.5
 
 const ArrayHeight = Math.floor(height * heightModifier)
 const ArrayWidth = Math.floor(width * widthModifier)
@@ -81,6 +84,9 @@ const b = Math.floor(color.b * 255)
 
 let pointerToX = 0
 let pointerToY = 0
+let overUI = false
+
+const labelGeometry = new THREE.PlaneBufferGeometry(1, 1);
 
 for(let i = 0; i < size; i++){
   const stride = i * 4;
@@ -91,8 +97,7 @@ for(let i = 0; i < size; i++){
 }
 
 const texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
-
-const fontLoader = new FontLoader()
+const textureLoader = new THREE.TextureLoader()
 
 //console.log(texture)
 texture.needsUpdate = true
@@ -113,6 +118,7 @@ const flameColour = new THREE.Vector3(255, 0, 0)
 const gunpowderColour = new THREE.Vector3(55, 55, 55)
 const acidColour = new THREE.Vector3(50, 205, 50)
 const metalColour = new THREE.Vector3(176, 179, 183)
+const bedrockColour = new THREE.Vector3(0, 0, 0)
 
 const red = new THREE.Vector3(245, 0, 0)
 const yellow = new THREE.Vector3(245, 245, 0)
@@ -130,6 +136,7 @@ const camera = new THREE.OrthographicCamera(width / -(2 / widthModifier), width 
 const renderer = new THREE.WebGLRenderer()
 
 
+
 //clock stuff
 let clock = new THREE.Clock()
 let delta = 0
@@ -142,8 +149,8 @@ let evenOdd = 0
 
 //ui stuff
 let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder
-let uiX = (ArrayWidth - 50) / 2
-let uiY = 15 + (ArrayHeight - 100) / -2
+let uiX = (ArrayWidth - 100) / 2
+let uiY = 10 + (ArrayHeight - 200) / -2
 
 
 
@@ -230,6 +237,15 @@ const metalBlock = {
   acidRes: 0.001
 }
 
+const bedrockBlock = {
+  type: 9,
+  colour: bedrockColour,
+  hasUpdated: 0, 
+  velocityX: 0,
+  velocityY: 0,
+  density: 99,
+}
+
 const emptyBlock = {
   type: 0,
   colour: emptyColour,
@@ -243,6 +259,9 @@ const emptyBlock = {
 let selectedBlock = emptyBlock
 let colourVariance = 25
 
+const getRndInteger = (min, max) => {
+  return Math.floor(Math.random() * (max - min) + min)
+}
 
 //set up info array
 const blockArray = new Array(size)
@@ -264,13 +283,8 @@ const App = () => {
   animate()
   return(
     <>
-      <div id = "sandInfo">Sand</div>
     </>
   );
-}
-
-const getRndInteger = (min, max) => {
-  return Math.floor(Math.random() * (max - min) + min)
 }
 
 const brensehamLine = (x0, y0, x1, y1, directBlock) => {
@@ -318,10 +332,13 @@ const brensehamLine = (x0, y0, x1, y1, directBlock) => {
 }
 
 function init () {
+
   renderer.setSize(width, height)
   renderer.domElement.addEventListener( 'pointermove', onPointerMove)
   renderer.domElement.addEventListener( 'pointerdown', onPointerDown )
   renderer.domElement.addEventListener( 'pointerup', onPointerUp )
+
+  renderer.setPixelRatio(window.devicePixelRatio);
 
   document.body.appendChild(renderer.domElement)
 
@@ -343,18 +360,104 @@ scene.add(paintMap)
 
 setupUI()
 
+//setup bedrock border
+for(let x = 0; x < ArrayWidth; x++){
+  addBlock(x, bedrockBlock)
+  addBlock(x + ArrayWidth * (ArrayHeight - 1), bedrockBlock )
+  addBlock(x + ArrayWidth * (ArrayHeight - 2), bedrockBlock )
+}
+
+for(let y = 0; y < ArrayHeight; y++){
+  addBlock(y * ArrayWidth, bedrockBlock)
+  addBlock(y * ArrayWidth + (ArrayWidth - 1), bedrockBlock )
+}
+
+}
+
+function makeLabelCanvas(size, name){
+  const borderSize = 2
+  const ctx = document.createElement('canvas').getContext('2d')
+  const font = `${size}px sans-serif`
+  ctx.font = font
+
+  const doubleBorderSize = borderSize * 2
+  const fwidth = ctx.measureText(name).width + doubleBorderSize
+  const fheight = size + doubleBorderSize
+
+  ctx.canvas.width = fwidth
+  ctx.canvas.height = fheight
+
+  ctx.font = font
+  ctx.textBaseline = 'top'
+  ctx.fillStyle = 'white'
+  ctx.fillText(name, borderSize, borderSize)
+
+  return ctx.canvas
+}
+
+function createText(size, text, xPos, yPos){
+  let sandCanvas = makeLabelCanvas(size, text)
+  let sandTexture = new THREE.CanvasTexture(sandCanvas)
+
+  let sandLabelMaterial = new THREE.MeshBasicMaterial({
+    map: sandTexture,
+    side: THREE.DoubleSide,
+    transparent: true,
+  });
+
+  let label = new THREE.Mesh(labelGeometry, sandLabelMaterial)
+
+  let labelBaseScale = 0.01;
+  label.scale.x = sandCanvas.width  * labelBaseScale
+  label.scale.y = sandCanvas.height * labelBaseScale
+
+  label.translateX(xPos)
+  label.translateY(yPos)
+
+  scene.add(label)
+}
+
+function drawSelection(x, y, colour, name){
+  let blockMesh = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(18, 18), 
+    new THREE.MeshBasicMaterial({color: colour})
+  )
+
+  blockMesh.translateX(uiX + x)
+  blockMesh.translateY(uiY + y)
+  blockMesh.name = name
+  scene.add(blockMesh)
+
+  createText(800, name, uiX + x, uiY + y + 13)
+  uiArray.push(blockMesh)
+
+  let border = textureLoader.load(borderOutline)
+
+  let outline = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(20, 20),
+    new THREE.MeshBasicMaterial({ map:border})
+  )
+  outline.material.transparent = true
+  //outline.material.needsUpdate = true
+
+  outline.translateX(uiX + x)
+  outline.translateY(uiY + y)
+
+  scene.add(outline)
 }
 
 function setupUI() {
+  const arrowTextureLeft = textureLoader.load(arrowLeftPic)
+  const arrowTextureRight = textureLoader.load(arrowRightPic)
+
+  const uiTextures = textureLoader.load(UITexture)
+  const uiMaterial = new THREE.MeshBasicMaterial( { map: uiTextures } )
+  uiMaterial.transparent = true
+
   bar = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(50 , 100),
-    new THREE.ShaderMaterial({
-      uniforms:{
-      },
-      vertexShader: _BARVS,
-      fragmentShader: _BARFS,
-    })
-);
+    new THREE.PlaneBufferGeometry(100 , 200),
+    uiMaterial 
+  )
 
   bar.translateX(uiX)
   bar.translateY(uiY)
@@ -363,122 +466,62 @@ function setupUI() {
 
   uiArray.push(bar)
 
-  sand = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0xCCCC99})
+  let backGround = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(99, 197), 
+    new THREE.MeshBasicMaterial({color: 0x000000})
   )
 
-  sand.translateX(uiX - 10)
-  sand.translateY(uiY + 35)
-  sand.name = "Sand"
-  scene.add(sand)
+  backGround.translateX(uiX + 1)
+  backGround.translateY(uiY + 1)
+  backGround.name = "backGround"
+  scene.add(backGround)
 
-  uiArray.push(sand)
+  drawSelection(-28, 0, 0xCCCC99, "Sand")
+  drawSelection(2, 0, 0x2323FF, "Water")
+  drawSelection(32, 0, 0x966919, "Wood")
+  drawSelection(-28, -30,0xff0000, "Fire" )
+  drawSelection(2, -30,0x646464, "Smoke" )
+  drawSelection(32, -30,0x32CD32, "Acid" )
+  drawSelection(-28, -60,0xB0B3B7, "Metal" )
+  drawSelection(2, -60,0x373737, "Gunpowder" )
 
-  /*
-  loader.load( 'fonts/helvetiker_regular.typeface.json', function ( font ) {
-
-    const sandText = new TextGeometry( 'Hello three.js!', {
-      font: font,
-      size: 80,
-      height: 5,
-      curveSegments: 12,
-      bevelEnabled: true,
-      bevelThickness: 10,
-      bevelSize: 8,
-      bevelOffset: 0,
-      bevelSegments: 5
-    } );
-  } );
-  */
-
-  water = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0x2323FF})
+  let arrowRight = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(30, 20), 
+    new THREE.MeshBasicMaterial({map: arrowTextureRight})
   )
 
-  water.translateX(uiX + 10)
-  water.translateY(uiY + 35)
-  water.name = "Water"
-  scene.add(water)
+  arrowRight.material.transparent = true
+  
 
-  uiArray.push(water)
+  arrowRight.translateX(uiX + 22)
+  arrowRight.translateY(uiY - 85)
 
-  gas = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0x646464})
+  scene.add(arrowRight)
+
+  let arrowLeft= new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(30, 20), 
+    new THREE.MeshBasicMaterial({map: arrowTextureLeft})
   )
 
-  gas.translateX(uiX - 10)
-  gas.translateY(uiY + 15)
-  gas.name = "Gas"
-  scene.add(gas)
+  arrowLeft.translateX(uiX - 18)
+  arrowLeft.translateY(uiY - 85)
 
-  uiArray.push(gas)
+  scene.add(arrowLeft)
 
-  wood = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0x966919})
-  )
-
-  wood.translateX(uiX + 10)
-  wood.translateY(uiY + 15)
-  wood.name = "Wood"
-  scene.add(wood)
-
-  uiArray.push(wood)
-
-  acid = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0x32CD32})
-  )
-
-  acid.translateX(uiX - 10)
-  acid.translateY(uiY - 5)
-  acid.name = "Acid"
-  scene.add(acid)
-
-  uiArray.push(acid)
-
-  fire = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0xff0000})
-  )
-
-  fire.translateX(uiX + 10)
-  fire.translateY(uiY - 5)
-  fire.name = "Fire"
-  scene.add(fire)
-
-  uiArray.push(fire)
-
-  metal = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0xB0B3B7})
-  )
-
-  metal.translateX(uiX - 10)
-  metal.translateY(uiY - 25)
-  metal.name = "Metal"
-  scene.add(metal)
-
-  uiArray.push(metal)
-
-  gunpowder = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(10, 10), 
-    new THREE.MeshBasicMaterial({color: 0x373737})
-  )
-
-  gunpowder.translateX(uiX + 10)
-  gunpowder.translateY(uiY - 25)
-  gunpowder.name = "Gunpowder"
-  scene.add(gunpowder)
-
-  uiArray.push(gunpowder)
 }
 
-function addBlock(position, block){
+function addBlock(position, block, x, y){
     //console.log(block)
+    if(x !== undefined && y !== undefined){
+      if(x < 0 || x > ArrayWidth - 1){
+        return 
+      }
+    }
+
+    if(y < 1 || y > ArrayHeight - 1){
+      return
+    }
+
     if(blockArray[position].density < block.density){
       blockArray[position] = JSON.parse(JSON.stringify(block))
 
@@ -518,15 +561,46 @@ raycaster.setFromCamera(pointer, camera)
 
 const intersects = raycaster.intersectObjects( uiArray );
 if(intersects.length > 0){
+  overUI = true
   for(let i = 0; i < intersects.length; i++){
-    if(intersects[i].object.name === "Sand") {
+    if(intersects[i].object.name === "Sand" && press) {
 
-      addBlock(150 + ArrayWidth * 15, gasBlock)
+      selectedBlock = sandBlock
     }
-  }
+    else if(intersects[i].object.name === "Water" && press) {
+
+      selectedBlock = waterBlock
+    }
+    else if(intersects[i].object.name === "Smoke" && press) {
+
+      selectedBlock = gasBlock
+    }
+    else if(intersects[i].object.name === "Wood" && press) {
+
+      selectedBlock = woodBlock
+    }
+    else if(intersects[i].object.name === "Acid" && press) {
+
+      selectedBlock = acidBlock
+    }
+    else if(intersects[i].object.name === "Fire" && press) {
+
+      selectedBlock = flameBlock
+    }
+    else if(intersects[i].object.name === "Metal" && press) {
+
+      selectedBlock = metalBlock
+    }
+    else if(intersects[i].object.name === "Gunpowder" && press) {
+
+      selectedBlock = gunpowderBlock
+    }
+  } 
+} else {
+  overUI = false
 }
 
-if(press){
+if(press && !overUI){
   //console.log("X = " + pointer.x + "         Y = " + pointer.y) 
   //scale 1
   /*
@@ -534,22 +608,22 @@ if(press){
   */
   
   //scale 2
-  addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock)
+  addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock, pointerToX, pointerToY)
 
-  addBlock((pointerToX + 1) + pointerToY * ArrayWidth, selectedBlock)
-  addBlock((pointerToX - 1) + pointerToY * ArrayWidth, selectedBlock)
-  addBlock(pointerToX + (pointerToY + 1) * ArrayWidth, selectedBlock)
-  addBlock(pointerToX + (pointerToY - 1) * ArrayWidth, selectedBlock)
+  addBlock((pointerToX + 1) + pointerToY * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY)
+  addBlock((pointerToX - 1) + pointerToY * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY)
+  addBlock(pointerToX + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX, pointerToY + 1)
+  addBlock(pointerToX + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX, pointerToY - 1)
 
-  addBlock((pointerToX + 1) + (pointerToY + 1) * ArrayWidth, selectedBlock)
-  addBlock((pointerToX - 1) + (pointerToY - 1) * ArrayWidth, selectedBlock)
-  addBlock((pointerToX - 1) + (pointerToY + 1) * ArrayWidth, selectedBlock)
-  addBlock((pointerToX + 1) + (pointerToY - 1) * ArrayWidth, selectedBlock)
+  addBlock((pointerToX + 1) + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY + 1)
+  addBlock((pointerToX - 1) + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY - 1)
+  addBlock((pointerToX - 1) + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY + 1)
+  addBlock((pointerToX + 1) + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY - 1)
 
-  addBlock((pointerToX + 2) + pointerToY * ArrayWidth, selectedBlock)
-  addBlock((pointerToX - 2) + pointerToY * ArrayWidth, selectedBlock)
-  addBlock(pointerToX + (pointerToY + 2) * ArrayWidth, selectedBlock)
-  addBlock(pointerToX + (pointerToY - 2) * ArrayWidth, selectedBlock)
+  addBlock((pointerToX + 2) + pointerToY * ArrayWidth, selectedBlock, pointerToX + 2, pointerToY)
+  addBlock((pointerToX - 2) + pointerToY * ArrayWidth, selectedBlock, pointerToX - 2, pointerToY)
+  addBlock(pointerToX + (pointerToY + 2) * ArrayWidth, selectedBlock, pointerToX, pointerToY + 2)
+  addBlock(pointerToX + (pointerToY - 2) * ArrayWidth, selectedBlock, pointerToX, pointerToY - 2)
   
   /*
   blockArray[pointerToX + pointerToY * ArrayWidth] = JSON.parse(JSON.stringify(selectedBlock))
@@ -913,16 +987,30 @@ function updateGas(x, y) {
   */
 }
 
+
+
 function checkSandLike(point, block, x, y){
-  if(block.density > blockArray[point - ArrayWidth].density){
-    switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
-  } 
-  else if(block.density > blockArray[point - ArrayWidth - 1].density ) {
-    switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y - block.velocityY, block), block.colour )
-  } 
-  else if(block.density > blockArray[point - ArrayWidth + 1].density) {
-    switchBlocks(point, brensehamLine(x, y, x + block.velocityX , y - block.velocityY, block), block.colour )
-  } 
+  if(getRndInteger(0,2) === 1){
+    if(block.density > blockArray[point - ArrayWidth].density){
+      switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth - 1].density ) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth + 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX , y - block.velocityY, block), block.colour )
+    } 
+  } else {
+    if(block.density > blockArray[point - ArrayWidth].density){
+      switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth - 1].density ) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - ArrayWidth + 1].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX , y - block.velocityY, block), block.colour )
+    } 
+  }
   
 }
 function updateSand(x, y){
@@ -1050,6 +1138,8 @@ document.onkeydown = function (e) {
     selectedBlock = acidBlock
   } else if (e.key === '8') {
     selectedBlock = metalBlock
+  } else if (e.key === '9') {
+    selectedBlock = bedrockBlock
   }
 }
 
