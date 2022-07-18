@@ -1080,17 +1080,17 @@ function activateChunk(x, y){
     }
   } 
   if(x % chunkSizeW === chunkSizeW - 1) {
-    if(chunkX + 1 <= chunkAmounts) {
+    if(chunkX + 1 < chunkAmounts) {
       chunkArray[chunkX + 1][chunkY].shouldNextStep = true
     }
   } 
   if(y % chunkSizeH === 0){
-    if(chunkY - 1 < 0){
+    if(chunkY - 1 >= 0){
       chunkArray[chunkX][chunkY - 1].shouldNextStep = true
     }
   } 
   if(y % chunkSizeH === chunkSizeH - 1){
-    if(chunkY + 1 >= chunkAmounts){
+    if(chunkY + 1 < chunkAmounts){
       chunkArray[chunkX][chunkY + 1].shouldNextStep = true
     }
 
