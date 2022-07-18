@@ -9,6 +9,7 @@ import arrowLeftPic from "./textures/ArrowLeft60x40.png"
 import arrowRightPic from "./textures/ArrowRight60x40.png"
 import dragOutPic from "./textures/DragOut80x30.png"
 import { BufferGeometry } from "three";
+import { isCompositeComponent } from "react-dom/test-utils";
 
 const _VS = `
 
@@ -108,7 +109,7 @@ texture.needsUpdate = true
 
 //for mk1 press
 let press = false
-
+let brushSize = 5
 
 //temp
 let total = 0
@@ -153,8 +154,11 @@ let doItOnce = 0
 const uiArray = []
 let evenOdd = 0
 
+//multithreading??
+const w = new Worker('worker.js')
+
 //ui stuff
-let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock
+let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9
 let uiX = (ArrayWidth - 100) / 2
 let uiY = 10 + (ArrayHeight - 200) / -2
 let uiFolded = false
@@ -173,7 +177,7 @@ const waterBlock = {
   velocityX: 2,
   velocityY: 2,
   density: 4,
-  spreadFactor: 4,
+  spreadFactor: 5,
 }
 
 const sandBlock = {
@@ -304,6 +308,7 @@ for(let i = 0; i < size; i++){
 }
 
 //chunk stuff????
+let plane
 const chunkAmounts = 16
 
 const chunkSizeH = Math.ceil(ArrayHeight / chunkAmounts)
@@ -318,6 +323,7 @@ const chunk = {
   shouldStep: false,
   shouldNextStep: false,
   bottomLeft: 0,
+  debugPlane: 0,
 }
 const chunkArray = Array.from(Array(chunkAmounts), () => new Array(chunkAmounts))
 
@@ -330,12 +336,11 @@ for(let x = 0; x < chunkAmounts; x++){
   }
 }
 
-chunkArray[14][13].shouldNextStep = true
-
 console.log("width = " + Math.floor(width * widthModifier))
 console.log("height = " + Math.floor(height * heightModifier))
 
 init()
+
 
 const App = () => {
   animate()
@@ -416,18 +421,36 @@ function init () {
 paintMap.name = "Canvas"
 scene.add(paintMap)
 
+//debug for chunks
+for(let x = 0; x < chunkAmounts; x++){
+  for(let y = 0; y < chunkAmounts; y++){
+    plane = new THREE.Mesh(
+      new THREE.PlaneBufferGeometry(chunkSizeW, chunkSizeH),
+      new THREE.MeshBasicMaterial({color: 0x888888})
+    )
+    plane.material.transparent = true
+    plane.material.opacity = 0
+    
+    plane.position.x = x * chunkSizeW - (chunkSizeW * 8) + 30
+    plane.position.y = y * chunkSizeH - (chunkSizeH * 8) + 22
+    chunkArray[x][y].debugPlane = plane
+
+    scene.add(chunkArray[x][y].debugPlane)
+  }
+}
+
 setupUI()
 
 //setup bedrock border
 for(let x = 0; x < ArrayWidth; x++){
-  addBlock(x, unbreakableBlock)
-  addBlock(x + ArrayWidth * (ArrayHeight - 1), unbreakableBlock )
-  addBlock(x + ArrayWidth * (ArrayHeight - 2), unbreakableBlock )
+  forceAddBlock(x, unbreakableBlock)
+  forceAddBlock(x + ArrayWidth * (ArrayHeight - 1), unbreakableBlock )
+  forceAddBlock(x + ArrayWidth * (ArrayHeight - 2), unbreakableBlock )
 }
 
 for(let y = 0; y < ArrayHeight; y++){
-  addBlock(y * ArrayWidth, unbreakableBlock)
-  addBlock(y * ArrayWidth + (ArrayWidth - 1), unbreakableBlock )
+  forceAddBlock(y * ArrayWidth, unbreakableBlock)
+  forceAddBlock(y * ArrayWidth + (ArrayWidth - 1), unbreakableBlock )
 }
 
 }
@@ -600,6 +623,45 @@ function setupUI() {
   uiArray.push(arrowLeft)
   scene.add(arrowLeft)
 
+  sizeButton1 = createUIButton(-30, 80, 0x00ff00)
+  uiArray.push(sizeButton1)
+  sizeButton1.name = "sizeButton1"
+  scene.add(sizeButton1)
+
+  sizeButton3 = createUIButton(-15, 80, 0x00ff00)
+  uiArray.push(sizeButton3)
+  sizeButton3.name = "sizeButton3"
+  scene.add(sizeButton3)
+
+  sizeButton5 = createUIButton(0, 80, 0x00ff00)
+  uiArray.push(sizeButton5)
+  sizeButton5.name = "sizeButton5"
+  scene.add(sizeButton5)
+
+  sizeButton7 = createUIButton(15, 80, 0x00ff00)
+  uiArray.push(sizeButton7)
+  sizeButton7.name = "sizeButton7"
+  scene.add(sizeButton7)
+
+  sizeButton9 = createUIButton(30, 80, 0x00ff00)
+  uiArray.push(sizeButton9)
+  sizeButton9.name = "sizeButton9"
+  scene.add(sizeButton9)
+
+
+
+}
+
+function createUIButton(x, y, color) {
+  let button = new THREE.Mesh(
+    new THREE.PlaneBufferGeometry(14, 10), 
+    new THREE.MeshBasicMaterial({color: color})
+  )
+
+  button.translateX(uiX + x)
+  button.translateY(uiY + y)
+  
+  return button
 }
 
 function updateUI(newX){
@@ -614,6 +676,11 @@ function updateUI(newX){
 
   bar.position.x += newX
 
+  sizeButton1.position.x += newX
+  sizeButton3.position.x += newX
+  sizeButton5.position.x += newX
+  sizeButton7.position.x += newX
+  sizeButton9.position.x += newX
   for(let i = 0; i < sand.length; i++){
     sand[i].position.x += newX
     water[i].position.x += newX
@@ -634,6 +701,23 @@ function cosineInterpolation(x, y, t) {
   return (x * (1 - temp) + y * temp)
 }
 
+function forceAddBlock(position, block){
+  blockArray[position] = JSON.parse(JSON.stringify(block))
+
+  data[position * 4] = block.colour.x
+  data[position * 4 + 1] = block.colour.y
+  data[position * 4 + 2] = block.colour.z
+  data[position * 4 + 3] = 255
+
+  if(block.type === 4){
+    block.ttd = getRndInteger(5, 150)
+  }
+  if(block.type === 5){
+    block.ttd = getRndInteger(10, 40)
+    block.colour = selectFireColour()
+  }
+}
+
 function addBlock(position, block, x, y){
     //out of bounds type stuff
     if(x !== undefined && y !== undefined){
@@ -645,6 +729,9 @@ function addBlock(position, block, x, y){
     if(y < 1 || y > ArrayHeight - 1){
       return
     }
+
+    activateChunk(x,y)
+
 
     //unbreakable block truly unbreakable!
     if(blockArray[position].density === 100){
@@ -682,6 +769,90 @@ function addBlock(position, block, x, y){
       data[position * 4 + 2] = emptyColour.z
       data[position * 4 + 3] = 255
     }
+}
+
+function switchBlocks(x, futureX, colour) { 
+  if(x === futureX){ //if theres no reason to switch blocks :///
+    return
+  }
+
+  
+  
+  //tell the chunk to become active
+  let pY = Math.floor(x / ArrayWidth)
+  let pX = x % ArrayWidth
+  activateChunk(pX, pY)
+
+  pY = Math.floor(futureX / ArrayWidth)
+  pX = futureX % ArrayWidth
+
+  activateChunk(pX, pY)
+
+
+  let tempBlock = blockArray[x]
+  blockArray[x] = blockArray[futureX]
+  blockArray[futureX] = tempBlock
+
+
+  let tempRGB = new THREE.Vector3(data[futureX * 4], data[futureX * 4 + 1], data[futureX * 4 + 2])
+
+  data[(x) * 4] = tempRGB.x
+  data[(x) * 4 + 1] = tempRGB.y
+  data[(x) * 4 + 2] = tempRGB.z
+  data[(x) * 4 + 3] = 255
+
+  let ranR = getRndInteger(0, colourVariance)
+  let ranG = getRndInteger(0, colourVariance)
+  let ranB = getRndInteger(0, colourVariance)
+
+  let randomR = ranR + colour.x > 255 ? 255 : ranR + colour.x
+  let randomG = ranG + colour.y > 255 ? 255 : ranG + colour.y
+  let randomB = ranB + colour.z > 255 ? 255 : ranB + colour.z
+
+
+  data[(futureX) * 4] = randomR
+  data[(futureX) * 4 + 1] = randomG
+  data[(futureX) * 4 + 2] = randomB
+  data[(futureX) * 4 + 3] = 255
+
+  /*
+  let tempBlock = blockArray[x]
+  switch(direction){
+    case 0: //up
+      blockArray[x] = blockArray[x + ArrayWidth]
+      blockArray[x + ArrayWidth] = tempBlock
+      break;
+    case 1: //upright
+      blockArray[x] = blockArray[x + ArrayWidth + 1]
+      blockArray[x + ArrayWidth + 1] = tempBlock
+      break;
+    case 2: //right
+      blockArray[x] = blockArray[x + 1]
+      blockArray[x + 1] = tempBlock
+      break;
+    case 3: //downright
+      blockArray[x] = blockArray[x - ArrayWidth + 1]
+      blockArray[x - ArrayWidth + 1] = tempBlock
+      break;
+    case 4: //down
+      blockArray[x] = blockArray[x - ArrayWidth]
+      blockArray[x - ArrayWidth] = tempBlock
+      break;
+    case 5: //downleft
+      blockArray[x] = blockArray[x - ArrayWidth - 1]
+      blockArray[x - ArrayWidth - 1] = tempBlock
+      break;
+    case 6: //left
+      blockArray[x] = blockArray[x - 1]
+      blockArray[x - 1] = tempBlock
+      break;
+    case 7: //upleft
+      blockArray[x] = blockArray[x + ArrayWidth - 1]
+      blockArray[x + ArrayWidth - 1] = tempBlock
+      break;
+  }
+  */
+
 }
 
 function switchPages(to, from){ //0 is left 1 is right
@@ -759,12 +930,29 @@ if(intersects.length > 0){
       }
       else if(intersects[i].object.name === "dragOut") {
         uiUpdating = true
-      } else if(intersects[i].object.name === "arrowRight"){
+      } 
+      else if(intersects[i].object.name === "arrowRight"){
         currentPage += 1
         switchPages(currentPage, currentPage - 1)
-      } else if(intersects[i].object.name === "arrowLeft"){
+      } 
+      else if(intersects[i].object.name === "arrowLeft"){
         currentPage -= 1
         switchPages(currentPage, currentPage + 1)
+      } 
+      else if(intersects[i].object.name === "sizeButton1") {
+        brushSize = 1
+      }
+      else if(intersects[i].object.name === "sizeButton3") {
+        brushSize = 3
+      }
+      else if(intersects[i].object.name === "sizeButton5") {
+        brushSize = 5
+      }
+      else if(intersects[i].object.name === "sizeButton7") {
+        brushSize = 7
+      }
+      else if(intersects[i].object.name === "sizeButton9") {
+        brushSize = 9
       }
     }
   } 
@@ -805,138 +993,65 @@ if(uiUpdating === true){
 
 if(press && !overUI){
   //circleBrush(pointerToX, pointerToY, 10)
-  circleBrushSolid(pointerToX, pointerToY, 10)
-  /*
-  addBlock(pointerToX + pointerToY * ArrayWidth, selectedBlock, pointerToX, pointerToY)
-
-  addBlock((pointerToX + 1) + pointerToY * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY)
-  addBlock((pointerToX - 1) + pointerToY * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY)
-  addBlock(pointerToX + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX, pointerToY + 1)
-  addBlock(pointerToX + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX, pointerToY - 1)
-
-  addBlock((pointerToX + 1) + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY + 1)
-  addBlock((pointerToX - 1) + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY - 1)
-  addBlock((pointerToX - 1) + (pointerToY + 1) * ArrayWidth, selectedBlock, pointerToX - 1, pointerToY + 1)
-  addBlock((pointerToX + 1) + (pointerToY - 1) * ArrayWidth, selectedBlock, pointerToX + 1, pointerToY - 1)
-
-  addBlock((pointerToX + 2) + pointerToY * ArrayWidth, selectedBlock, pointerToX + 2, pointerToY)
-  addBlock((pointerToX - 2) + pointerToY * ArrayWidth, selectedBlock, pointerToX - 2, pointerToY)
-  addBlock(pointerToX + (pointerToY + 2) * ArrayWidth, selectedBlock, pointerToX, pointerToY + 2)
-  addBlock(pointerToX + (pointerToY - 2) * ArrayWidth, selectedBlock, pointerToX, pointerToY - 2)
-  */
+  circleBrushSolid(pointerToX, pointerToY, brushSize)
 }
 
 // ------------- update functions -------------
-
-for(let x = 0; x < chunkAmounts; x++){
-  for(let y = 0; y < chunkAmounts; y++) {
-    let currentChunk = chunkArray[x][y]
-  
-
-    if(currentChunk.shouldStep) {
-      console.log("Activate the chunk")
-      chunkLogic(currentChunk.chunkX, currentChunk.chunkY)
-    }
-
-    currentChunk.shouldStep = currentChunk.shouldNextStep
-    currentChunk.shouldNextStep = false
-    addBlock(currentChunk.bottomLeft, bedrockBlock)
-  }
-}
-
-
-//evenOdd = getRndInteger(0,2)
-
-if(evenOdd === 1){
-  for(let y = 0; y < ArrayHeight; y++){
-    for(let x = 0; x < ArrayWidth; x++){
-      let point = x + y * ArrayWidth
-      if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
-        if(blockArray[point].type === 1){
-          blockArray[point].hasUpdated = 1
-          updateSand(x, y)
-          continue
-        }
-        if(blockArray[point].type === 2){
-          blockArray[point].hasUpdated = 1
-          updateWater(x, y)  
-          continue
-        }
-        if(blockArray[point].type === 4){
-          blockArray[point].hasUpdated = 1
-          updateGas(x,y)
-          continue
-        }
-        if(blockArray[point].type === 5){
-          blockArray[point].hasUpdated = 1
-          updateFire(x, y)
-          continue
-        }
-        if(blockArray[point].type === 6){
-          blockArray[point].hasUpdated = 1
-          updateSand(x, y)
-          continue
-        }
-        if(blockArray[point].type === 7){
-          blockArray[point].hasUpdated = 1
-          updateAcid(x, y)
-          continue
-        }
-        if(blockArray[point].type === 11){
-          blockArray[point].hasUpdated = 1
-          updateLava(x, y)
-          continue
-        }
+if(evenOdd === 1) {
+  for(let y = 0; y < ArrayHeight; y++) {
+    for(let x = 0; x < ArrayWidth; x++) {
+      let currentChunk = findChunk(x, y)
+      if(currentChunk.shouldStep){
+        blockLogic(x, y)
+      } else {
+        x += chunkSizeW - 1
       }
     }
   }
   evenOdd = 0
-} 
-else if(evenOdd === 0){
-  for(let y = 0; y < ArrayHeight; y++){
-    for(let x = ArrayWidth - 1; x >= 0; x--){
-      let point = x + y * ArrayWidth
-  
-      if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
-        if(blockArray[point].type === 1){
-          blockArray[point].hasUpdated = 1
-          updateSand(x, y)
-          continue
-        }
-        if(blockArray[point].type === 2){
-          blockArray[point].hasUpdated = 1
-          updateWater(x , y)  
-          continue
-        }
-        if(blockArray[point].type === 4){
-          blockArray[point].hasUpdated = 1
-          updateGas(x,y)
-          continue
-        }
-        if(blockArray[point].type === 5){
-          blockArray[point].hasUpdated = 1
-          updateFire(x, y)
-          continue
-        }
-        if(blockArray[point].type === 6){
-          blockArray[point].hasUpdated = 1
-          updateSand(x, y)
-          continue
-        }
-        if(blockArray[point].type === 7){
-          blockArray[point].hasUpdated = 1
-          updateAcid(x, y)
-          continue
-        }
-        if(blockArray[point].type === 11){
-          blockArray[point].hasUpdated = 1
-          updateLava(x, y)
-          continue
-        }
+} else {
+  for(let y = 0; y < ArrayHeight; y++) {
+    for(let x = ArrayWidth - 1; x >= 0; x--) {
+      let currentChunk = findChunk(x, y)
+      if(currentChunk.shouldStep){
+        blockLogic(x, y)
+      } else {
+        x -= chunkSizeW - 1
       }
     }
   }
   evenOdd = 1
+}
+
+//update for the actual points in normal order
+
+/*
+for(let point = 0; point < size; point++){
+  let currentChunk = findChunk(point)
+  if(currentChunk.shouldStep){
+    blockLogic(point)
+  } else {
+    point += chunkSizeW - 1
+  }
+}
+*/
+
+//update for the chunks
+for(let x = 0; x < chunkAmounts; x++){
+  for(let y = 0; y < chunkAmounts; y++) {
+    let currentChunk = chunkArray[x][y]
+  
+    currentChunk.debugPlane.material.opacity = 0
+    if(currentChunk.shouldStep) {
+      //chunkLogic(x, y)
+      currentChunk.debugPlane.material.opacity = 0.2
+      
+    }
+
+    currentChunk.shouldStep = currentChunk.shouldNextStep
+    currentChunk.shouldNextStep = false
+    //addBlock(currentChunk.bottomLeft, bedrockBlock)
+  }
 }
 
 //reset has Updated
@@ -946,13 +1061,94 @@ for(let x = 0; x < size; x++){
 texture.needsUpdate = true
 }
 
+function findChunk(x, y) {
+  let chunkX = Math.floor(x / chunkSizeW)
+  let chunkY = Math.floor(y / chunkSizeH)
+
+  return chunkArray[chunkX][chunkY]
+}
+
+function activateChunk(x, y){
+  let chunkX = Math.floor(x / chunkSizeW)
+  let chunkY = Math.floor(y / chunkSizeH)
+
+  chunkArray[chunkX][chunkY].shouldNextStep = true
+
+  if(x % chunkSizeW === 0){
+    if(chunkX - 1 >= 0){
+      chunkArray[chunkX - 1][chunkY].shouldNextStep = true
+    }
+  } 
+  if(x % chunkSizeW === chunkSizeW - 1) {
+    if(chunkX + 1 <= chunkAmounts) {
+      chunkArray[chunkX + 1][chunkY].shouldNextStep = true
+    }
+  } 
+  if(y % chunkSizeH === 0){
+    if(chunkY - 1 < 0){
+      chunkArray[chunkX][chunkY - 1].shouldNextStep = true
+    }
+  } 
+  if(y % chunkSizeH === chunkSizeH - 1){
+    if(chunkY + 1 >= chunkAmounts){
+      chunkArray[chunkX][chunkY + 1].shouldNextStep = true
+    }
+
+  }
+}
+
+function blockLogic(x, y) {
+  let point = x + ArrayWidth * y
+  if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
+    if(blockArray[point].type === 1){
+      blockArray[point].hasUpdated = 1
+      updateSand(x, y)
+      return
+    }
+    if(blockArray[point].type === 2){
+      blockArray[point].hasUpdated = 1
+      updateWater(x, y)  
+      return
+    }
+    if(blockArray[point].type === 4){
+      blockArray[point].hasUpdated = 1
+      updateGas(x,y)
+      return
+    }
+    if(blockArray[point].type === 5){
+      blockArray[point].hasUpdated = 1
+      updateFire(x, y)
+      return
+    }
+    if(blockArray[point].type === 6){
+      blockArray[point].hasUpdated = 1
+      updateSand(x, y)
+      return
+    }
+    if(blockArray[point].type === 7){
+      blockArray[point].hasUpdated = 1
+      updateAcid(x, y)
+      return
+    }
+    if(blockArray[point].type === 11){
+      blockArray[point].hasUpdated = 1
+      updateLava(x, y)
+      return
+    }
+  }
+}
+
 function chunkLogic(chunkX, chunkY){
   if(evenOdd === 1){
     for(let y = chunkY * chunkSizeH; y < chunkY * chunkSizeH + chunkSizeH; y++){
+      if(y >= ArrayHeight){
+        continue
+      }
       for(let x = chunkX * chunkSizeW; x < chunkX * chunkSizeW + chunkSizeW; x++){
+        if(x >= ArrayWidth) {
+          continue
+        }
         let point = x + y * ArrayWidth
-        addBlock(point, woodBlock)
-        /*
         if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
           if(blockArray[point].type === 1){
             blockArray[point].hasUpdated = 1
@@ -990,14 +1186,20 @@ function chunkLogic(chunkX, chunkY){
             continue
           }
         }
-        */
       }
     }
     evenOdd = 0
   } 
+  
   else if(evenOdd === 0){
-    for(let y = 0; y < ArrayHeight; y++){
-      for(let x = ArrayWidth - 1; x >= 0; x--){
+    for(let y = chunkY * chunkSizeH; y < chunkY * chunkSizeH + chunkSizeH; y++){
+      if(y >= ArrayHeight) {
+        continue
+      }
+      for(let x = chunkX * chunkSizeW + chunkSizeW; x >= chunkX * chunkSizeW; x--){
+        if(x >= ArrayWidth) {
+          continue
+        }
         let point = x + y * ArrayWidth
     
         if(blockArray[point].type !== 0 && blockArray[point].hasUpdated === 0) {
@@ -1041,6 +1243,7 @@ function chunkLogic(chunkX, chunkY){
     }
     evenOdd = 1
   }
+  
 }
 
 function circleBrushSolid(p, q, radius){
@@ -1106,9 +1309,14 @@ function animate() {
 function checkFireLike(accessPoint){
   if(blockArray[accessPoint].flammability !== 0 && blockArray[accessPoint].flammability !== undefined)
   {
+    let pY = Math.floor(accessPoint / ArrayWidth)
+    let pX = accessPoint % ArrayWidth
+    activateChunk(pX, pY)
     if(getRndInteger(0, 1001) <= blockArray[accessPoint].flammability * 100)
     {
-      burnBlock(accessPoint, flameBlock)
+      let pY = Math.floor(accessPoint / ArrayWidth)
+      let pX = accessPoint % ArrayWidth
+      burnBlock(accessPoint, flameBlock, pX, pY)
     }
   }
 }
@@ -1116,9 +1324,12 @@ function checkFireLike(accessPoint){
 function checkAcidLike(accessPoint){
   if(blockArray[accessPoint].acidRes !== 0 && blockArray[accessPoint].acidRes !== undefined) 
   {
+    let pY = Math.floor(accessPoint / ArrayWidth)
+    let pX = accessPoint % ArrayWidth
+    activateChunk(pX, pY)
     if(getRndInteger(0, 1001) <= blockArray[accessPoint].acidRes * 100)
     {
-      addBlock(accessPoint, emptyBlock)
+      addBlock(accessPoint, emptyBlock, pX, pY)
     }
   }
 }
@@ -1138,10 +1349,11 @@ function selectFireColour(){
 function updateFire(x, y) {
   let point = x + y * ArrayWidth
 
+  activateChunk(x, y)
   blockArray[point].ttd--
   if(blockArray[point].ttd <= 0){
-    addBlock(point, emptyBlock)
-    addBlock(point, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, gasBlock, x, y)
   }
 
   let accessPoint = point - ArrayWidth //below
@@ -1179,7 +1391,8 @@ function updateFire(x, y) {
 
 }
 
-function burnBlock(point, block){
+function burnBlock(point, block, x, y){
+    activateChunk(x, y)
     let densityLength = blockArray[point].density * 2.5
 
     blockArray[point] = JSON.parse(JSON.stringify(block))
@@ -1209,75 +1422,82 @@ function updateLava(x,y){
   let accessPoint = point - ArrayWidth //below
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
   
   accessPoint = point - ArrayWidth - 1 //below left
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point - ArrayWidth + 1 //below right
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point - 1 //left
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point + 1 //right
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point + ArrayWidth + 1 //up right
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point + ArrayWidth - 1 //up left
   checkFireLike(accessPoint)
   if(blockArray[accessPoint].type === 2){
-    addBlock(point, emptyBlock)
-    addBlock(point, bedrockBlock)
-    addBlock(accessPoint, emptyBlock)
-    addBlock(accessPoint, gasBlock)
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
     return
   }
 
   accessPoint = point + ArrayWidth //up 
   checkFireLike(accessPoint)
+  if(blockArray[accessPoint].type === 2){
+    addBlock(point, emptyBlock, x, y)
+    addBlock(point, bedrockBlock, x, y)
+    addBlock(accessPoint, emptyBlock, x , y)
+    addBlock(accessPoint, gasBlock, x, y)
+    return
+  }
 
   if( y < 2){
     return
@@ -1314,6 +1534,12 @@ function checkWaterLike(point, block, x, y){
     if(block.density > blockArray[point - ArrayWidth].density){
       switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
     } 
+    else if(block.density > blockArray[point - 1 - ArrayWidth].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX - block.spreadFactor, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point + 1 - ArrayWidth].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX + block.spreadFactor, y - block.velocityY, block), block.colour )
+    } 
     else if(block.density > blockArray[point - 1].density) {
       switchBlocks(point, brensehamLine(x, y, x - block.velocityX - block.spreadFactor, y, block), block.colour )
     } 
@@ -1323,6 +1549,12 @@ function checkWaterLike(point, block, x, y){
   } else {
     if(block.density > blockArray[point - ArrayWidth].density){
       switchBlocks(point, brensehamLine(x, y, x, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point + 1 - ArrayWidth].density) {
+      switchBlocks(point, brensehamLine(x, y, x + block.velocityX + block.spreadFactor, y - block.velocityY, block), block.colour )
+    } 
+    else if(block.density > blockArray[point - 1 - ArrayWidth].density) {
+      switchBlocks(point, brensehamLine(x, y, x - block.velocityX - block.spreadFactor, y - block.velocityY, block), block.colour )
     } 
     else if(block.density > blockArray[point + 1].density) {
       switchBlocks(point, brensehamLine(x, y, x + block.velocityX + block.spreadFactor, y, block), block.colour )
@@ -1362,7 +1594,7 @@ function updateGas(x, y) {
 
   blockArray[point].ttd--
   if(blockArray[point].ttd <= 0){
-    addBlock(point, emptyBlock )
+    addBlock(point, emptyBlock, x, y )
   }
 
   let block = blockArray[point]
@@ -1424,77 +1656,6 @@ function updateSand(x, y){
   checkSandLike(point, block, x, y)
 }
 
-function switchBlocks(x, futureX, colour) { 
-  if(x === futureX){ //if theres no reason to switch blocks :///
-    return
-  }
-
-  let tempBlock = blockArray[x]
-  blockArray[x] = blockArray[futureX]
-  blockArray[futureX] = tempBlock
-
-
-  let tempRGB = new THREE.Vector3(data[futureX * 4], data[futureX * 4 + 1], data[futureX * 4 + 2])
-
-  data[(x) * 4] = tempRGB.x
-  data[(x) * 4 + 1] = tempRGB.y
-  data[(x) * 4 + 2] = tempRGB.z
-  data[(x) * 4 + 3] = 255
-
-  let ranR = getRndInteger(0, colourVariance)
-  let ranG = getRndInteger(0, colourVariance)
-  let ranB = getRndInteger(0, colourVariance)
-
-  let randomR = ranR + colour.x > 255 ? 255 : ranR + colour.x
-  let randomG = ranG + colour.y > 255 ? 255 : ranG + colour.y
-  let randomB = ranB + colour.z > 255 ? 255 : ranB + colour.z
-
-
-  data[(futureX) * 4] = randomR
-  data[(futureX) * 4 + 1] = randomG
-  data[(futureX) * 4 + 2] = randomB
-  data[(futureX) * 4 + 3] = 255
-
-  /*
-  let tempBlock = blockArray[x]
-  switch(direction){
-    case 0: //up
-      blockArray[x] = blockArray[x + ArrayWidth]
-      blockArray[x + ArrayWidth] = tempBlock
-      break;
-    case 1: //upright
-      blockArray[x] = blockArray[x + ArrayWidth + 1]
-      blockArray[x + ArrayWidth + 1] = tempBlock
-      break;
-    case 2: //right
-      blockArray[x] = blockArray[x + 1]
-      blockArray[x + 1] = tempBlock
-      break;
-    case 3: //downright
-      blockArray[x] = blockArray[x - ArrayWidth + 1]
-      blockArray[x - ArrayWidth + 1] = tempBlock
-      break;
-    case 4: //down
-      blockArray[x] = blockArray[x - ArrayWidth]
-      blockArray[x - ArrayWidth] = tempBlock
-      break;
-    case 5: //downleft
-      blockArray[x] = blockArray[x - ArrayWidth - 1]
-      blockArray[x - ArrayWidth - 1] = tempBlock
-      break;
-    case 6: //left
-      blockArray[x] = blockArray[x - 1]
-      blockArray[x - 1] = tempBlock
-      break;
-    case 7: //upleft
-      blockArray[x] = blockArray[x + ArrayWidth - 1]
-      blockArray[x + ArrayWidth - 1] = tempBlock
-      break;
-  }
-  */
-
-}
-
 function onPointerDown(event) {
   press = true
   
@@ -1521,14 +1682,14 @@ function onPointerMove(event) {
 
 function resetArrayData() {
   for(let i = 0; i < size; i++){
-    addBlock(i, emptyBlock) 
+    forceAddBlock(i, emptyBlock) 
   }
 }
 
 function resetEmptyArrayData() {
   for(let i = 0; i < size; i++){
     if(blockArray[i].type === 0){
-      addBlock(i, emptyBlock) 
+      forceAddBlock(i, emptyBlock) 
     }
   }
 }
