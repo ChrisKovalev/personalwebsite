@@ -83,21 +83,12 @@ const ArrayWidth = Math.floor(width * widthModifier)
 //data texture for shader!
 const size = ArrayHeight * ArrayWidth
 const data = new Uint8Array(4 * size)
-const color = new THREE.Color (0xffffff)
 
 let pointerToX = 0
 let pointerToY = 0
 let overUI = false
 
 const labelGeometry = new THREE.PlaneBufferGeometry(1, 1);
-
-for(let i = 0; i < size; i++){
-  const stride = i * 4;
-  data[stride] = 255//r * Math.random()
-  data[stride + 1] = 255//g * Math.random()
-  data[stride + 2] = 255//b * Math.random()
-  data[stride + 3] = 255
-}
 
 const texture = new THREE.DataTexture(data, ArrayWidth, ArrayHeight, THREE.RGBAFormat)
 const textureLoader = new THREE.TextureLoader()
@@ -153,9 +144,6 @@ let interval = 1/60
 let doItOnce = 0
 const uiArray = []
 let evenOdd = 0
-
-//multithreading??
-const w = new Worker('worker.js')
 
 //ui stuff
 let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9
