@@ -1,15 +1,15 @@
 {
-  "main.css": "/personalwebsite/static/css/main.75fe3751.chunk.css",
-  "main.js": "/personalwebsite/static/js/main.c5126f22.chunk.js",
-  "main.js.map": "/personalwebsite/static/js/main.c5126f22.chunk.js.map",
-  "static/js/1.7f8c91dd.chunk.js": "/personalwebsite/static/js/1.7f8c91dd.chunk.js",
-  "static/js/1.7f8c91dd.chunk.js.map": "/personalwebsite/static/js/1.7f8c91dd.chunk.js.map",
-  "static/js/2.9ce1d8ee.chunk.js": "/personalwebsite/static/js/2.9ce1d8ee.chunk.js",
-  "static/js/2.9ce1d8ee.chunk.js.map": "/personalwebsite/static/js/2.9ce1d8ee.chunk.js.map",
-  "runtime~main.js": "/personalwebsite/static/js/runtime~main.02e6e446.js",
-  "runtime~main.js.map": "/personalwebsite/static/js/runtime~main.02e6e446.js.map",
-  "static/css/main.75fe3751.chunk.css.map": "/personalwebsite/static/css/main.75fe3751.chunk.css.map",
-  "index.html": "/personalwebsite/index.html",
-  "precache-manifest.d01401ac76db105bbef8dd6d113cd659.js": "/personalwebsite/precache-manifest.d01401ac76db105bbef8dd6d113cd659.js",
-  "service-worker.js": "/personalwebsite/service-worker.js"
+  "main.css": "/pixelGame/static/css/main.75fe3751.chunk.css",
+  "main.js": "/pixelGame/static/js/main.c5126f22.chunk.js",
+  "main.js.map": "/pixelGame/static/js/main.c5126f22.chunk.js.map",
+  "static/js/1.7f8c91dd.chunk.js": "/pixelGame/static/js/1.7f8c91dd.chunk.js",
+  "static/js/1.7f8c91dd.chunk.js.map": "/pixelGame/static/js/1.7f8c91dd.chunk.js.map",
+  "static/js/2.9ce1d8ee.chunk.js": "/pixelGame/static/js/2.9ce1d8ee.chunk.js",
+  "static/js/2.9ce1d8ee.chunk.js.map": "/pixelGame/static/js/2.9ce1d8ee.chunk.js.map",
+  "runtime~main.js": "/pixelGame/static/js/runtime~main.ac2ed307.js",
+  "runtime~main.js.map": "/pixelGame/static/js/runtime~main.ac2ed307.js.map",
+  "static/css/main.75fe3751.chunk.css.map": "/pixelGame/static/css/main.75fe3751.chunk.css.map",
+  "index.html": "/pixelGame/index.html",
+  "precache-manifest.4c2c9277f69e4133f9ca7b351f8e402a.js": "/pixelGame/precache-manifest.4c2c9277f69e4133f9ca7b351f8e402a.js",
+  "service-worker.js": "/pixelGame/service-worker.js"
 }
