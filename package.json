@@ -2,7 +2,7 @@
   "name": "website",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://chriskovalev.github.io/personalwebsite/",
+  "homepage": "https://chriskovalev.github.io/pixelGame/",
   "dependencies": {
     "@react-three/fiber": "^8.0.22",
     "@testing-library/jest-dom": "^5.16.4",

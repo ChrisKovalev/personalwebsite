@@ -8,8 +8,22 @@ import borderOutline from "./textures/borderPick40x40.png"
 import arrowLeftPic from "./textures/ArrowLeft60x40.png"
 import arrowRightPic from "./textures/ArrowRight60x40.png"
 import dragOutPic from "./textures/DragOut80x30.png"
+import scaleSelector1 from "./textures/scaleSelector28x20.png"
+import scaleSelector1S from "./textures/scaleSelectorSelected28x20.png"
+import scaleSelector3S from "./textures/scaleSelector3Selected28x20.png"
+import scaleSelector3 from "./textures/scaleSelector328x20.png"
+import scaleSelector5S from "./textures/scaleSelector5Selected28x20.png"
+import scaleSelector5 from "./textures/scaleSelector528x20.png"
+import scaleSelector7S from "./textures/scaleSelector7Selected28x20.png"
+import scaleSelector7 from "./textures/scaleSelector728x20.png"
+import scaleSelector9S from "./textures/scaleSelector9Selected28x20.png"
+import scaleSelector9 from "./textures/scaleSelector928x20.png"
+import clearIcon from "./textures/clearIcon40x40.png"
+import eraserIcon from "./textures/eraserIcon40x40.png"
 import { BufferGeometry } from "three";
 import { isCompositeComponent } from "react-dom/test-utils";
+
+import {scrollY} from './Overhead'
 
 const _VS = `
 
@@ -27,13 +41,14 @@ void main(){
 
 const _FS = `
 uniform sampler2D v_texture;
+uniform float v_opacity;
 
 varying vec3 v_Normal;
 varying vec2 v_uv;
 
 void main() {
   vec4 tex = texture2D(v_texture, v_uv);
-  gl_FragColor = vec4(tex.xyz, 1);
+  gl_FragColor = vec4(tex.xyz, v_opacity);
 }
 `
 
@@ -102,6 +117,8 @@ texture.needsUpdate = true
 let press = false
 let brushSize = 5
 
+
+let tOpacity = 1
 //temp
 let total = 0
 
@@ -133,8 +150,6 @@ const scene = new THREE.Scene()
 const camera = new THREE.OrthographicCamera(width / -(2 / widthModifier), width / (2 / widthModifier), height / (2 / heightModifier), height / -(2 / heightModifier), 0, 10)
 const renderer = new THREE.WebGLRenderer()
 
-
-
 //clock stuff
 let clock = new THREE.Clock()
 let delta = 0
@@ -146,7 +161,7 @@ const uiArray = []
 let evenOdd = 0
 
 //ui stuff
-let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9
+let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9, sizeButton1S, sizeButton3S, sizeButton5S, sizeButton7S, sizeButton9S, clearButton, eraserButton, clearText, eraserText
 let uiX = (ArrayWidth - 100) / 2
 let uiY = 10 + (ArrayHeight - 200) / -2
 let uiFolded = false
@@ -277,6 +292,8 @@ const emptyBlock = {
 }
 
 
+let currentScroll = 0
+
 let selectedBlock = emptyBlock
 let colourVariance = 25
 
@@ -327,8 +344,35 @@ for(let x = 0; x < chunkAmounts; x++){
 console.log("width = " + Math.floor(width * widthModifier))
 console.log("height = " + Math.floor(height * heightModifier))
 
+//shader materials
+const paintMap = new THREE.Mesh(
+  new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
+  new THREE.ShaderMaterial({
+    uniforms:{
+      v_texture: {value: texture},
+      v_opacity: {value: tOpacity}
+    },
+    vertexShader: _VS,
+    fragmentShader: _FS,
+  })
+);
+paintMap.name = "Canvas"
+paintMap.transparent = true
+scene.add(paintMap)
+
 init()
 
+
+//overhead material
+const darkenPlane = new THREE.Mesh(
+  new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
+  new THREE.MeshBasicMaterial( {color: 0x000000, side: THREE.DoubleSide} )
+);
+
+darkenPlane.material.transparent = true
+darkenPlane.material.opacity = 0
+
+scene.add(darkenPlane)
 
 const App = () => {
   animate()
@@ -390,24 +434,11 @@ function init () {
   renderer.domElement.addEventListener( 'pointerup', onPointerUp )
 
   renderer.setPixelRatio(window.devicePixelRatio);
-
+  renderer.domElement.id = "Renderer"
   document.body.appendChild(renderer.domElement)
+  
 
   camera.position.z = 1
-
-  //shader materials
-  const paintMap = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(ArrayWidth , ArrayHeight),
-    new THREE.ShaderMaterial({
-      uniforms:{
-        v_texture: {value: texture}
-      },
-      vertexShader: _VS,
-      fragmentShader: _FS,
-    })
-);
-paintMap.name = "Canvas"
-scene.add(paintMap)
 
 //debug for chunks
 for(let x = 0; x < chunkAmounts; x++){
@@ -440,6 +471,8 @@ for(let y = 0; y < ArrayHeight; y++){
   forceAddBlock(y * ArrayWidth, unbreakableBlock)
   forceAddBlock(y * ArrayWidth + (ArrayWidth - 1), unbreakableBlock )
 }
+
+selectedBlock = sandBlock
 
 }
 
@@ -526,10 +559,29 @@ function drawSelection(x, y, colour, name){
 }
 
 function setupUI() {
+  const clearTexture = textureLoader.load(clearIcon)
+  const eraserTexture = textureLoader.load(eraserIcon)
+
   const arrowTextureLeft = textureLoader.load(arrowLeftPic)
   const arrowTextureRight = textureLoader.load(arrowRightPic)
   const dragOutBanner = textureLoader.load(dragOutPic)
   const uiTextures = textureLoader.load(UITexture)
+
+  const scaleSelectorOne = textureLoader.load(scaleSelector1)
+  const scaleSelectorSelectedOne = textureLoader.load(scaleSelector1S)
+
+  const scaleSelectorThree= textureLoader.load(scaleSelector3)
+  const scaleSelectorSelectedThree = textureLoader.load(scaleSelector3S)
+
+  const scaleSelectorFive = textureLoader.load(scaleSelector5)
+  const scaleSelectorSelectedFive = textureLoader.load(scaleSelector5S)
+
+  const scaleSelectorSeven = textureLoader.load(scaleSelector7)
+  const scaleSelectorSelectedSeven = textureLoader.load(scaleSelector7S)
+
+  const scaleSelectorNine = textureLoader.load(scaleSelector9)
+  const scaleSelectorSelectedNine = textureLoader.load(scaleSelector9S)
+
 
   dragOut = new THREE.Mesh(
     new THREE.PlaneBufferGeometry(40, 15),
@@ -611,39 +663,77 @@ function setupUI() {
   uiArray.push(arrowLeft)
   scene.add(arrowLeft)
 
-  sizeButton1 = createUIButton(-30, 80, 0x00ff00)
+  sizeButton1 = createUIButton(-30, 80, scaleSelectorOne, 14, 10)
   uiArray.push(sizeButton1)
   sizeButton1.name = "sizeButton1"
   scene.add(sizeButton1)
 
-  sizeButton3 = createUIButton(-15, 80, 0x00ff00)
+  sizeButton1S = createUIButton(-30, 80, scaleSelectorSelectedOne, 14, 10)
+  sizeButton1S.translateX(100)
+  scene.add(sizeButton1S)
+
+  sizeButton3 = createUIButton(-15, 80, scaleSelectorThree, 14, 10)
   uiArray.push(sizeButton3)
   sizeButton3.name = "sizeButton3"
   scene.add(sizeButton3)
 
-  sizeButton5 = createUIButton(0, 80, 0x00ff00)
+  sizeButton3S = createUIButton(-15, 80, scaleSelectorSelectedThree, 14, 10)
+  sizeButton3S.translateX(100)
+  scene.add(sizeButton3S)
+
+  sizeButton5 = createUIButton(0, 80, scaleSelectorFive, 14, 10)
   uiArray.push(sizeButton5)
   sizeButton5.name = "sizeButton5"
   scene.add(sizeButton5)
 
-  sizeButton7 = createUIButton(15, 80, 0x00ff00)
+  sizeButton5S = createUIButton(0, 80, scaleSelectorSelectedFive, 14, 10)
+  sizeButton5S.translateX(0)
+  scene.add(sizeButton5S)
+
+  sizeButton7 = createUIButton(15, 80, scaleSelectorSeven, 14, 10)
   uiArray.push(sizeButton7)
   sizeButton7.name = "sizeButton7"
   scene.add(sizeButton7)
 
-  sizeButton9 = createUIButton(30, 80, 0x00ff00)
+  sizeButton7S = createUIButton(15, 80, scaleSelectorSelectedSeven, 14, 10)
+  sizeButton7S.translateX(100)
+  scene.add(sizeButton7S)
+
+  sizeButton9 = createUIButton(30, 80, scaleSelectorNine, 14, 10)
   uiArray.push(sizeButton9)
   sizeButton9.name = "sizeButton9"
   scene.add(sizeButton9)
 
+  sizeButton9S = createUIButton(30, 80, scaleSelectorSelectedNine, 14, 10)
+  sizeButton9S.translateX(100)
+  scene.add(sizeButton9S)
 
+  let brushText = createText(900, "Brush Size", uiX, uiY + 90)
+  scene.add(brushText)
+
+  clearButton = createUIButton(-25, 50, clearTexture, 20, 20)
+  uiArray.push(clearButton)
+  clearButton.name = "clearButton"
+  scene.add(clearButton)
+
+  clearText = createText(900, "Clear", uiX - 25, uiY + 65)
+  scene.add(clearText)
+
+  eraserButton = createUIButton(25, 50, eraserTexture, 20, 20)
+  uiArray.push(eraserButton)
+  eraserButton.name = "eraserButton"
+  scene.add(eraserButton)
+
+  eraserText = createText(900, "Eraser", uiX + 25, uiY + 65)
+  scene.add(eraserText)
+  
 
 }
 
-function createUIButton(x, y, color) {
+function createUIButton(x, y, map, sizeX, sizeY) {
   let button = new THREE.Mesh(
-    new THREE.PlaneBufferGeometry(14, 10), 
-    new THREE.MeshBasicMaterial({color: color})
+    new THREE.PlaneBufferGeometry(sizeX, sizeY), 
+    new THREE.MeshBasicMaterial({map: map})
   )
 
   button.translateX(uiX + x)
@@ -669,6 +759,12 @@ function updateUI(newX){
   sizeButton5.position.x += newX
   sizeButton7.position.x += newX
   sizeButton9.position.x += newX
+
+  sizeButton1S.position.x += newX
+  sizeButton3S.position.x += newX
+  sizeButton5S.position.x += newX
+  sizeButton7S.position.x += newX
+  sizeButton9S.position.x += newX
   for(let i = 0; i < sand.length; i++){
     sand[i].position.x += newX
     water[i].position.x += newX
@@ -690,6 +786,7 @@ function cosineInterpolation(x, y, t) {
 }
 
 function forceAddBlock(position, block){
+  
   blockArray[position] = JSON.parse(JSON.stringify(block))
 
   data[position * 4] = block.colour.x
@@ -878,8 +975,17 @@ function switchPages(to, from){ //0 is left 1 is right
 }
 
 function logic(){
+camera.zoom = 1 + (scrollY / 50)
+camera.updateProjectionMatrix()
+
+tOpacity = (scrollY / 12) //wehn scrollY = 25, full dark screen
+darkenPlane.material.opacity = tOpacity
+//console.log(paintMap)
+
+
 // ------------- pointer logic -------------
 raycaster.setFromCamera(pointer, camera)
+
 
 const intersects = raycaster.intersectObjects( uiArray );
 if(intersects.length > 0){
@@ -927,20 +1033,84 @@ if(intersects.length > 0){
         currentPage -= 1
         switchPages(currentPage, currentPage + 1)
       } 
-      else if(intersects[i].object.name === "sizeButton1") {
+      else if(intersects[i].object.name === "sizeButton1" && brushSize !== 1) {
+
+        if(brushSize === 3) {
+          sizeButton3S.translateX(100)
+        } else if(brushSize === 5) {
+          sizeButton5S.translateX(100)
+        } else if(brushSize === 7) {
+          sizeButton7S.translateX(100)
+        } else if(brushSize === 9) {
+          sizeButton9S.translateX(100)
+        }
+
+
         brushSize = 1
+        sizeButton1S.translateX(-100)
       }
-      else if(intersects[i].object.name === "sizeButton3") {
+      else if(intersects[i].object.name === "sizeButton3" && brushSize !== 3) {
+        if(brushSize === 1) {
+          sizeButton1S.translateX(100)
+        } else if(brushSize === 5) {
+          sizeButton5S.translateX(100)
+        } else if(brushSize === 7) {
+          sizeButton7S.translateX(100)
+        } else if(brushSize === 9) {
+          sizeButton9S.translateX(100)
+        }
+
         brushSize = 3
+        sizeButton3S.translateX(-100)
       }
-      else if(intersects[i].object.name === "sizeButton5") {
+      else if(intersects[i].object.name === "sizeButton5" && brushSize !== 5)  {
+        if(brushSize === 3) {
+          sizeButton3S.translateX(100)
+        } else if(brushSize === 1) {
+          sizeButton1S.translateX(100)
+        } else if(brushSize === 7) {
+          sizeButton7S.translateX(100)
+        } else if(brushSize === 9) {
+          sizeButton9S.translateX(100)
+        }
+
         brushSize = 5
+        sizeButton5S.translateX(-100)
       }
-      else if(intersects[i].object.name === "sizeButton7") {
+      else if(intersects[i].object.name === "sizeButton7" && brushSize !== 7) {
+        if(brushSize === 3) {
+          sizeButton3S.translateX(100)
+        } else if(brushSize === 5) {
+          sizeButton5S.translateX(100)
+        } else if(brushSize === 1) {
+          sizeButton1S.translateX(100)
+        } else if(brushSize === 9) {
+          sizeButton9S.translateX(100)
+        }
+
         brushSize = 7
+        sizeButton7S.translateX(-100)
       }
-      else if(intersects[i].object.name === "sizeButton9") {
+      else if(intersects[i].object.name === "sizeButton9"&& brushSize !== 9) {
+        if(brushSize === 3) {
+          sizeButton3S.translateX(100)
+        } else if(brushSize === 5) {
+          sizeButton5S.translateX(100)
+        } else if(brushSize === 7) {
+          sizeButton7S.translateX(100)
+        } else if(brushSize === 1) {
+          sizeButton1S.translateX(100)
+        }
+
         brushSize = 9
+        sizeButton9S.translateX(-100)
+      }
+      else if(intersects[i].object.name === "clearButton") {
+        resetArrayData()
+        renderer.render(scene, camera)
+      }
+      else if(intersects[i].object.name === "eraserButton") {
+        selectedBlock = emptyBlock
       }
     }
   } 
@@ -1286,9 +1456,14 @@ function animate() {
   delta += clock.getDelta()
   if(delta > interval) {
     stats.begin()
-    logic()
-    renderer.render(scene, camera)
-    delta = delta % interval
+    if(scrollY <= 14){
+      logic()
+      renderer.render(scene, camera)
+      delta = delta % interval
+      renderer.setSize(width, height)
+    } else {
+      renderer.setSize(0,0)
+    }
     stats.end()
   }
   //drawUI()
@@ -1579,6 +1754,8 @@ function checkGasLike(point, block, x, y){
 
 function updateGas(x, y) {
   let point = x + y * ArrayWidth
+  activateChunk(x, y)
+
 
   blockArray[point].ttd--
   if(blockArray[point].ttd <= 0){
@@ -1670,8 +1847,18 @@ function onPointerMove(event) {
 
 function resetArrayData() {
   for(let i = 0; i < size; i++){
-    forceAddBlock(i, emptyBlock) 
+    forceAddBlock(i, emptyBlock)
   }
+  for(let x = 0; x < ArrayWidth; x++){
+    forceAddBlock(x, unbreakableBlock)
+    forceAddBlock(x + ArrayWidth * (ArrayHeight - 1), unbreakableBlock )
+    forceAddBlock(x + ArrayWidth * (ArrayHeight - 2), unbreakableBlock )
+  }
+  
+  for(let y = 0; y < ArrayHeight; y++){
+    forceAddBlock(y * ArrayWidth, unbreakableBlock)
+    forceAddBlock(y * ArrayWidth + (ArrayWidth - 1), unbreakableBlock )
+  } 
 }
 
 function resetEmptyArrayData() {
@@ -1709,6 +1896,8 @@ document.onkeydown = function (e) {
   } else if(e.key === 't') {
     resetEmptyArrayData()
     renderer.render(scene, camera)
+  } else if(e.key === 'c'){
+    console.log(currentScroll)
   }
 }
 
