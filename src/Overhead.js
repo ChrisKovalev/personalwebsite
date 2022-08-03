@@ -41,14 +41,14 @@ class Overhead extends React.Component {
 
     render() {
         return(
-        <>
+        <body style={{backgroundColor: "black"}}>
             {scrollY <= 14 && 
                 <App></App>
             }
             {scrollY > 14 && 
                 <InfoDetails></InfoDetails>
             }
-        </>
+        </body>
         );
     }
 }
