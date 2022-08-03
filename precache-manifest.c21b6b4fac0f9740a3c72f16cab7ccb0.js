@@ -1,11 +1,11 @@
 self.__precacheManifest = [
   {
-    "revision": "d6b01bf3e6546c90a0e6",
+    "revision": "a0db0ddd121d0cfffaaf",
     "url": "/pixelGame/static/css/main.3d913aa2.chunk.css"
   },
   {
-    "revision": "d6b01bf3e6546c90a0e6",
-    "url": "/pixelGame/static/js/main.d6b01bf3.chunk.js"
+    "revision": "a0db0ddd121d0cfffaaf",
+    "url": "/pixelGame/static/js/main.a0db0ddd.chunk.js"
   },
   {
     "revision": "2d3efeb71c7eebfe7cd0",
@@ -20,7 +20,7 @@ self.__precacheManifest = [
     "url": "/pixelGame/static/js/runtime~main.5d504812.js"
   },
   {
-    "revision": "d4baa6a8913b1361ac164578d86bf596",
+    "revision": "66d74440eaf9d8f5ac350196b784e756",
     "url": "/pixelGame/index.html"
   }
 ];

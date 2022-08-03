@@ -1,7 +1,7 @@
 {
   "main.css": "/pixelGame/static/css/main.3d913aa2.chunk.css",
-  "main.js": "/pixelGame/static/js/main.d6b01bf3.chunk.js",
-  "main.js.map": "/pixelGame/static/js/main.d6b01bf3.chunk.js.map",
+  "main.js": "/pixelGame/static/js/main.a0db0ddd.chunk.js",
+  "main.js.map": "/pixelGame/static/js/main.a0db0ddd.chunk.js.map",
   "static/js/1.2d3efeb7.chunk.js": "/pixelGame/static/js/1.2d3efeb7.chunk.js",
   "static/js/1.2d3efeb7.chunk.js.map": "/pixelGame/static/js/1.2d3efeb7.chunk.js.map",
   "static/js/2.858874bd.chunk.js": "/pixelGame/static/js/2.858874bd.chunk.js",
@@ -10,6 +10,6 @@
   "runtime~main.js.map": "/pixelGame/static/js/runtime~main.5d504812.js.map",
   "static/css/main.3d913aa2.chunk.css.map": "/pixelGame/static/css/main.3d913aa2.chunk.css.map",
   "index.html": "/pixelGame/index.html",
-  "precache-manifest.d1850427bf763f4e9e2391313b88b9b4.js": "/pixelGame/precache-manifest.d1850427bf763f4e9e2391313b88b9b4.js",
+  "precache-manifest.c21b6b4fac0f9740a3c72f16cab7ccb0.js": "/pixelGame/precache-manifest.c21b6b4fac0f9740a3c72f16cab7ccb0.js",
   "service-worker.js": "/pixelGame/service-worker.js"
 }
