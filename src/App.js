@@ -161,7 +161,7 @@ const uiArray = []
 let evenOdd = 0
 
 //ui stuff
-let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9, sizeButton1S, sizeButton3S, sizeButton5S, sizeButton7S, sizeButton9S, clearButton, eraserButton, clearText, eraserText
+let bar, sand, water, gas, lava, acid, wood, metal, fire, gunpowder, dragOut, arrowRight, arrowLeft, backGround, bedrock, sizeButton1, sizeButton3, sizeButton5, sizeButton7, sizeButton9, sizeButton1S, sizeButton3S, sizeButton5S, sizeButton7S, sizeButton9S, clearButton, eraserButton, clearText, eraserText, brushText
 let uiX = (ArrayWidth - 100) / 2
 let uiY = 10 + (ArrayHeight - 200) / -2
 let uiFolded = false
@@ -708,7 +708,7 @@ function setupUI() {
   sizeButton9S.translateX(100)
   scene.add(sizeButton9S)
 
-  let brushText = createText(900, "Brush Size", uiX, uiY + 90)
+  brushText = createText(900, "Brush Size", uiX, uiY + 90)
   scene.add(brushText)
 
   clearButton = createUIButton(-25, 50, clearTexture, 20, 20)
@@ -765,6 +765,13 @@ function updateUI(newX){
   sizeButton5S.position.x += newX
   sizeButton7S.position.x += newX
   sizeButton9S.position.x += newX
+
+  eraserButton.position.x += newX
+  clearButton.position.x += newX
+  eraserText.position.x += newX
+  clearText.position.x += newX
+  brushText.position.x += newX
+  
   for(let i = 0; i < sand.length; i++){
     sand[i].position.x += newX
     water[i].position.x += newX
